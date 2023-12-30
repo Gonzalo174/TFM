@@ -200,7 +200,7 @@ def gaussian_2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset, plot = F
     return ret   
 
 
-def iteration( img_post0, img_pre0, win_shape, exploration = 10, translation_Y = "None", translation_X = "None", edge = 100, mode = "Default", A = 0.9, control = [(-1,-1)]):
+def iteration( img_post0, img_pre0, win_shape, exploration = 10, translation_Y = "None", translation_X = "None", edge = 100, mode = "Smooth3", A = 0.9, control = [(-1,-1)]):
     """
     Parameters
     ----------
@@ -219,7 +219,7 @@ def iteration( img_post0, img_pre0, win_shape, exploration = 10, translation_Y =
     edge : int, optional
         Extra border, to prevent going outside post image. The default is 0.
     mode : str, optional
-        Mode using to calculate maximum correlation. The default is "Default".
+        Mode using to calculate maximum correlation. The default is "Smooth3".
     A : float, optional:
         Controls the admisibility of PRE windows in relation to the presence of signal from nanospheres.
 
@@ -376,29 +376,13 @@ def iteration( img_post0, img_pre0, win_shape, exploration = 10, translation_Y =
 
                     plt.show()
             
-            if mode == "Default":
-                y0, x0 = np.unravel_index( cross_corr.argmax(), cross_corr.shape )
-                y, x = -(y0 - exploration), -(x0 - exploration)
-                
-                pre_win_std = np.std( pre_win )
-                if pre_win_std > A*pre_std:
-                    Y[j,i] = y
-                    X[j,i] = x
- 
-            if mode == "No control":
-                y0, x0 = np.unravel_index( cross_corr.argmax(), cross_corr.shape )
-                y, x = -(y0 - exploration), -(x0 - exploration)
-                
-                Y[j,i] = y
-                X[j,i] = x
-            
                     
     deformation_map = Y+translation_Y, X+translation_X       
             
     return deformation_map
 
 
-def n_iterations( img_post, img_pre, win_shape_0, iterations = 3, exploration = 1000, mode = "Default", A = 0.85, control = [(-1,-1)]):
+def n_iterations( img_post, img_pre, win_shape_0, iterations = 3, exploration = 1000, mode = "Smooth3", A = 0.85, control = [(-1,-1)]):
     """
     Parameters
     ----------
@@ -413,7 +397,7 @@ def n_iterations( img_post, img_pre, win_shape_0, iterations = 3, exploration = 
     exploration : int, optional
         Number of pixels explored over the plane for each exploration window. The default is 1000.
     mode : str, optional
-        Mode using to calculate maximum correlation in the last iteration. The default is "Default".
+        Mode using to calculate maximum correlation in the last iteration. The default is "Smooth3".
 
     Returns
     -------
@@ -558,7 +542,72 @@ def traction( Y, X, ps, ws, E, nu, lam, Lcurve = False ):
 
     FuX, FuY = np.fft.fft2( X*ps ), np.fft.fft2( Y*ps ) # FFT de la deformación
     k0 = np.fft.fftfreq(l,ws)*2*np.pi
-    k0[0] = 0.00000001 # para evitar dividir por 0
+    k0[0] = 1e-10 # para evitar dividir por 0
+    kx, ky = np.meshgrid( k0, -k0 )
+    k = np.sqrt( kx**2 + ky**2 )
+    alpha = np.arctan2(ky, kx)
+
+    if lam >= 0:
+    
+        Kxx = 2*(1+nu)*( (1-nu)+nu*np.sin(alpha)**2 )/(E*k) 
+        Kyy = 2*(1+nu)*( (1-nu)+nu*np.cos(alpha)**2 )/(E*k)
+        K_ = 2*(1+nu)*( nu*np.cos(alpha)*np.sin(alpha) )/(E*k)   
+    
+        Ttx, Tty = np.zeros([l]*2), np.zeros([l]*2)
+        Ttx_im, Tty_im = np.zeros([l]*2), np.zeros([l]*2)
+    
+        for j in range(l):
+            for i in range(l):
+                TK = np.array( [[ Kxx[j,i]  ,   K_[j,i]  ],
+                               [ K_[j,i]   ,   Kyy[j,i] ]]  )
+                Tu = np.array(  [ FuX[j,i]   ,  FuY[j,i] ] )
+                Id = np.array( [[1,0],[0,1]] )
+                # TK_inv = np.linalg.inv(TK)
+                M = np.dot( np.linalg.inv( ( np.dot( TK, TK ) + lam*Id ) ) , TK )
+                Tt = np.dot( M, Tu )
+    
+                Ttx[j,i], Tty[j,i] = np.real(Tt[0]), np.real(Tt[1])
+                Ttx_im[j,i], Tty_im[j,i] = np.imag(Tt[0]), np.imag(Tt[1])
+    
+        imaginator = np.array( [ [1j]*l ]*l  )
+        tx, ty = np.fft.ifft2( Ttx + imaginator*Ttx_im ), np.fft.ifft2( Tty + imaginator*Tty_im )
+    
+        Tvx0 = Kxx*( Ttx + imaginator*Ttx_im  ) + K_*( Tty + imaginator*Tty_im ) 
+        Tvy0 = K_*( Ttx + imaginator*Ttx_im  ) + Kyy*( Tty + imaginator*Tty_im )     
+        vx0, vy0 = np.fft.ifft2( Tvx0 ), np.fft.ifft2( Tvy0 )  
+      
+    elif lam < 0:
+        
+        Kxx = 2*(1+nu)*( (1-nu)+nu*np.sin(alpha)**2 )/(E*k) 
+        Kyy = 2*(1+nu)*( (1-nu)+nu*np.cos(alpha)**2 )/(E*k)
+        K_ = 2*(1+nu)*( nu*np.cos(alpha)*np.sin(alpha) )/(E*k)   
+        
+        Kxx_inv = 0.5*E*k*( (1-nu) + nu*np.cos(alpha)**2 )/(1-nu**2)
+        Kyy_inv = 0.5*E*k*( (1-nu) + nu*np.sin(alpha)**2 )/(1-nu**2)
+        K__inv = -0.5*E*k*( nu*np.cos(alpha)*np.sin(alpha) )/(1-nu**2)  
+        
+        Ttx = FuX*Kxx_inv + FuY*K__inv
+        Tty = FuX*K__inv + FuY*Kyy_inv
+
+        Tvx = Ttx*Kxx + Tty*K_
+        Tvy = Ttx*K_ + Tty*Kyy
+
+        tx, ty = np.fft.ifft2( Ttx ), np.fft.ifft2( Tty  )
+        vx0, vy0 = np.fft.ifft2( Tvx ), np.fft.ifft2( Tvy  )
+        
+    if Lcurve == False:
+        result = ty, tx    
+    else:
+        result = ty, tx, vy0, vx0
+    
+    return result
+
+def deformation( ty, tx, ws, E, nu ):
+    l = tx.shape[0]
+
+    Ftx, Fty = np.fft.fft2( tx - np.mean(tx) ), np.fft.fft2( ty - np.mean(ty) ) # FFT de la tracción
+    k0 = np.fft.fftfreq(l,ws)*2*np.pi
+    k0[0] = 1e-10 # para evitar dividir por 0
     kx, ky = np.meshgrid( k0, -k0 )
     k = np.sqrt( kx**2 + ky**2 )
     alpha = np.arctan2(ky, kx)
@@ -567,45 +616,16 @@ def traction( Y, X, ps, ws, E, nu, lam, Lcurve = False ):
     Kyy = 2*(1+nu)*( (1-nu)+nu*np.cos(alpha)**2 )/(E*k)
     K_ = 2*(1+nu)*( nu*np.cos(alpha)*np.sin(alpha) )/(E*k)  
 
-    # Kxx_inv = E*k*( (1-nu) + nu*np.cos(alpha)**2 )/(1-nu**2)
-    # Kyy_inv = E*k*( (1-nu) + nu*np.sin(alpha)**2 )/(1-nu**2)
-    # K__inv = -E*k*( nu*np.cos(alpha)*np.sin(alpha) )/(1-nu**2)   
-
-    Ttx, Tty = np.zeros([l]*2), np.zeros([l]*2)
-    Ttx_im, Tty_im = np.zeros([l]*2), np.zeros([l]*2)
-
-    for j in range(l):
-        for i in range(l):
-            TK = np.array( [[ Kxx[j,i]  ,   K_[j,i]  ],
-                           [ K_[j,i]   ,   Kyy[j,i] ]]  )
-            Tu = np.array(  [ FuX[j,i]   ,  FuY[j,i] ] )
-            Id = np.array( [[1,0],[0,1]] )
-            # TK_inv = np.linalg.inv(TK)
-            M = np.dot( np.linalg.inv( ( np.dot( TK, TK ) + lam*Id ) ) , TK )
-            Tt = np.dot( M, Tu )
-
-            Ttx[j,i], Tty[j,i] = np.real(Tt[0]), np.real(Tt[1])
-            Ttx_im[j,i], Tty_im[j,i] = np.imag(Tt[0]), np.imag(Tt[1])
-
-    imaginator = np.array( [ [1j]*l ]*l  )
-    tx, ty = np.fft.ifft2( Ttx + imaginator*Ttx_im ), np.fft.ifft2( Tty + imaginator*Tty_im )
-
-    # Tvx0 = FuX - Kxx*( Ttx + imaginator*Ttx_im  ) + K_*( Tty + imaginator*Tty_im ) 
-    # Tvy0 = FuY - K_*( Ttx + imaginator*Ttx_im  ) + Kyy*( Tty + imaginator*Tty_im )     
-    # vx0, vy0 = np.fft.ifft2( Tvx0 ), np.fft.ifft2( Tvy0 )
+    Fux = Ftx*Kxx + Fty*K_
+    Fuy = Ftx*K_ + Fty*Kyy
     
-    Tvx0 = Kxx*( Ttx + imaginator*Ttx_im  ) + K_*( Tty + imaginator*Tty_im ) 
-    Tvy0 = K_*( Ttx + imaginator*Ttx_im  ) + Kyy*( Tty + imaginator*Tty_im )     
-    vx0, vy0 = np.fft.ifft2( Tvx0 ), np.fft.ifft2( Tvy0 )  
-  
-    if Lcurve == False:
-        result = ty, tx    
-    else:
-        result = ty, tx, vy0, vx0
+    # Fux[0,0] = np.sum(tx)
+    # Fuy[0,0] = np.sum(tx) 
     
-    return result
-
-
+    ux, uy = np.fft.ifft2( Fux ), np.fft.ifft2( Fuy )
+    # ux, uy = ux - np.mean(ux), uy# + np.mean(uy)
+    
+    return uy, ux
 
 def Z_iteration0( stack_post0, img_pre0, win_shape, exploration = 1, translation_Y = "None", translation_X = "None", mode = "Smooth3", A = 0.9, z0 = 0 ):
     """

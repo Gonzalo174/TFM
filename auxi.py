@@ -8,6 +8,7 @@ Created on Tue Dec 26 11:06:36 2023
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy import signal
 import oiffile as of
 import TFM
 
@@ -29,7 +30,7 @@ def barra_de_escala( scale_length, pixel_size = 0.1007, scale_unit = 'µm', loc 
     plt.yticks([])
 
 
-def busca_esferas( img, ps = 0.1007, win = 3, th = 1, std_img = 0 ):
+def busca_esferas( img, ps = 0.1007, win = 2.5, A = 1, std_img = 0 ):
     if std_img == 0:
         std_img = np.std( img )
     
@@ -43,9 +44,24 @@ def busca_esferas( img, ps = 0.1007, win = 3, th = 1, std_img = 0 ):
             std_matrix[j,i] = np.std( img_ )
     
     win_with_sph = np.zeros( [l]*2 )
-    win_with_sph[ std_matrix/std_img > th ] = 1
+    win_with_sph[ std_matrix/std_img > A ] = 1
     
     return win_with_sph, int(ws*l)
+
+def busca_A( img, f0, ps = 0.1007, win = 3, A0 = 0.85, std_img = 0 ):
+    it = 0
+    fraccion = 0
+    while np.abs( f0 - fraccion ) > 0.01 and it < 30:
+        ventanas_con_esferas, dim = busca_esferas( img, ps, win, A = A0, std_img = 0 )
+        fraccion = np.mean( ventanas_con_esferas )
+        
+        if fraccion > f0:
+            A0 = A0 + 0.01
+        elif fraccion < f0:
+            A0 = A0 - 0.01
+        it += 1    
+            
+    return A0
 
 def busca_manchas(img, th = 1000):
     sat = np.zeros([1024]*2)
@@ -71,6 +87,24 @@ def round_pro(array2D):
         round_array2D = np.round( array2D )
     return round_array2D
 
+def smooth(img, kernel_size):
+    """
+    Parameters
+    ----------
+    img : numpy.2darray like
+        2 dimentional array - image.
+    kernel_size : int
+        lenght of the kernel used to blur the image
+
+    Returns
+    -------
+    smooth_img : numpy.2darray
+        2 dimentional array - image, each pixel value is the mean of the pixels values at kernel´s area, cetered in that pixel.
+
+    """
+    kernel = np.ones([kernel_size]*2)/kernel_size**2
+    smooth_img = signal.convolve2d(img, kernel, mode='same')
+    return smooth_img
 
 def median_blur(img, kernel_size):
     """
@@ -221,6 +255,29 @@ def reshape_mask(mask, dom_x, dom_y):
                 new_mask[j,i] = 1
     return new_mask
 
+def interpolate( array ):
+    l = len(array)
+    l_ = int(2*l-1)
+    array_ = np.zeros([l_,l_])
+    for j in range(l):
+        for i in range(l_):
+            if i%2 == 0:
+                array_[2*j,i] = array[j,i//2]
+            else:
+                array_[2*j,i] = (array[j,i//2] + array[j,i//2+1])/2
+    for j in range(l-1):
+        array_[2*j+1] = (array_[2*j] + array_[2*j+2])/2             
+    return array_
+
+def anti_interpolate( array_ ):
+    l_ = len(array_)
+    l = int((l_+1)/2)
+    array = np.zeros([l,l])
+    for j in range(l):
+        for i in range(l):
+            array[j,i] = array_[2*j,2*i]    
+    return array
+
 
 def celula( N, line, place = 'home' ):
     if place == 'home':
@@ -230,13 +287,11 @@ def celula( N, line, place = 'home' ):
     
     if line == 'MCF7':
         carpetas = ["23.08.17 - gon MCF7 1 - C16", "23.08.18 - gon MCF7 2 - B16", "23.08.18 - gon MCF7 3 - A16", "23.08.24 - gon MCF7 4 - A23", "23.08.24 - gon MCF7 5 - B23", "23.08.25 - gon MCF7 6 - D23", "23.08.25 - gon MCF7 7 - C23", "23.08.31 - gon MCF7 8 - B30", "23.08.31 - gon MCF7 9 - A30", "23.09.01 - gon MCF7 10 - C30", "23.09.01 - gon MCF7 11 - D30"]
-        pre_post7 = {(11,2):(6,5), (11,3):(4,3), (11,4):(4,4), (10,1):(4,3), (10,2):(8,4), (10,5):(4,4), (9,1):(3,3), (1,1):(6,5),    (8,2):(4,4), (8,3):(5,5), (7,1):(6,4), (7,2):(5,4), (6,2):(6,5), (6,3):(5,4), (6,4):(4,5), (5,4):(3,4), (4,1):(7,7), (3,3):(6,6)   }
-
-        print(N)
+        pre_post7 = {(11,2):(6,5), (11,3):(4,3), (11,4):(5,5), (10,1):(4,3), (10,2):(8,4), (10,5):(4,4), (9,1):(3,3), (1,1):(6,5),    (8,2):(4,4), (8,3):(5,5), (7,1):(6,4), (7,2):(5,4), (6,2):(6,5), (6,3):(5,4), (6,4):(4,5), (5,4):(3,4), (4,1):(7,7), (3,3):(6,6)   }
         full_path1 = path + carpetas[ N[0] - 1 ]
 
         name = carpetas[ N[0] - 1 ][-3:] + "_R0" + str( N[1] )
-        print(name)
+        print('invocando',name)
         metadata = pd.read_csv( full_path1 + "\Data.csv", delimiter = ',', usecols=np.arange(3,15,1))
         metadata_region = metadata.loc[ metadata["Región"] == N[1] ]    
         
@@ -254,6 +309,9 @@ def celula( N, line, place = 'home' ):
         mascara10 = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF7\\" + name + "_m_10um.png")
         if mascara10[1,1] == 1:
             mascara10 = 1 - mascara10        
+        mascara20 = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF7\\" + name + "_m_20um.png")
+        if mascara20[1,1] == 1:
+            mascara20 = 1 - mascara20        
         
         pre = stack_pre[ pre_post7[N][0] ]
         
@@ -289,7 +347,7 @@ def celula( N, line, place = 'home' ):
         full_path1 = path + carpetas[ distribucion[N-1] ]
         
         name = carpetas[ distribucion[N-1] ][-3:] + "_R" + str(int( 100 +N ))[1:]
-        print(name)
+        print('invocando',name)
         metadata = pd.read_csv( full_path1 + "\Data.csv", delimiter = ',', usecols=np.arange(3,15,1))
         metadata_region = metadata.loc[ metadata["Región"] == N ]
         
@@ -302,6 +360,7 @@ def celula( N, line, place = 'home' ):
         celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[0]+".oif" )[1,2+pre10[N-1]-post10[N-1]]
         mascara = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_00um.csv")
         mascara10 = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_10um.csv")
+        mascara20 = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_20um.csv")
 
         pre = stack_pre[ pre10[N-1] ]
         post = TFM.correct_driff( stack_post[ post10[N-1] ], pre, 50 )
@@ -316,7 +375,7 @@ def celula( N, line, place = 'home' ):
             pre = pre*(1-sat) + pre_profundo*sat
             post = post*(1-sat) + post_profundo*sat    
 
-    return pre, post, mascara, mascara10, pixel_size
+    return pre, post, mascara, mascara10, mascara20, pixel_size
 
 
 
