@@ -426,7 +426,7 @@ def n_iterations( img_post, img_pre, win_shape_0, iterations = 3, exploration = 
     
     return domain, deformation_map
 
-def nmt(Y_, X_, noise, threshold, mode = "Mean"):
+def nmt(Y_, X_, noise, threshold, polar = False, alpha = 1):
     """
     Parameters
     ----------
@@ -455,38 +455,61 @@ def nmt(Y_, X_, noise, threshold, mode = "Mean"):
     X = X_.copy()
     l = X.shape[0]
     result = np.zeros( [l]*2 )
-    # means_X = np.zeros( [l]*2 )
-    # means_Y = np.zeros( [l]*2 )
+    result_polar = np.zeros( [l]*2 )
+
     for j in range(1, l-1):
         for i in range(1, l-1):
             # valores en la pocision a analizar
             value_X = X[j,i]
             value_Y = Y[j,i]
+            value_R = np.sqrt( X[j,i]**2 + Y[j,i]**2  )
+            value_t = np.arctan2( Y[j,i], X[j,i]  )
+            
             # valores de los vecinos
             neighbours_X = np.array( [ X[j+1,i+1], X[j+1,i], X[j+1,i-1], X[j,i-1], X[j-1,i-1], X[j-1,i], X[j-1,i+1], X[j,i+1] ] )
             neighbours_Y = np.array( [ Y[j+1,i+1], Y[j+1,i], Y[j+1,i-1], Y[j,i-1], Y[j-1,i-1], Y[j-1,i], Y[j-1,i+1], Y[j,i+1] ] )
+            neighbours_R = np.sqrt( neighbours_X**2 + neighbours_Y**2 )
+            neighbours_t = np.arctan2( neighbours_Y, neighbours_X )
+            
             # medias de los vecinos
             median_X = np.median( neighbours_X )        
             median_Y = np.median( neighbours_Y )
+            median_R = np.median( neighbours_R )
+            median_t = np.median( neighbours_t )
+                        
             # residuos
             residual_values_X = ( np.abs(neighbours_X - median_X) )
             residual_values_Y = ( np.abs(neighbours_Y - median_Y) )
+            residual_values_R = ( np.abs(neighbours_R - median_R) )
+            residual_values_t = ( np.abs(neighbours_t - median_t) )
+            
             # media de los residuos
             res_median_X = np.median( residual_values_X )        
             res_median_Y = np.median( residual_values_Y )
+            res_median_R = np.median( residual_values_R )
+            res_median_t = np.median( residual_values_t )
+            
             if res_median_X == 0:
                 res_median_X += noise
             if res_median_Y == 0:
                 res_median_Y += noise    
+            if res_median_R == 0:
+                res_median_R += noise
+            if res_median_t == 0:
+                res_median_t += noise                    
             
             residual_value_X0 = np.abs( ( value_X - median_X )/res_median_X )
             residual_value_Y0 = np.abs( ( value_Y - median_Y )/res_median_Y )
+            residual_value_R0 = np.abs( ( value_R - median_R )/res_median_R )
+            residual_value_t0 = np.abs( ( value_t - median_t )/res_median_t )            
+            
             if residual_value_X0 >= threshold or residual_value_Y0 >= threshold:
-                # means_X[j,i] = np.mean( neighbours_X ) 
-                # means_Y[j,i] = np.mean( neighbours_Y ) 
                 result[j,i] = 1
 
-    if mode == "Mean":
+            if residual_value_R0 >= threshold or residual_value_t0 >= threshold*alpha:
+                result_polar[j,i] = 1
+
+    if not polar:
         # lo cambio por el promedio
         for j in range(1, l-1):
             for i in range(1, l-1):
@@ -499,19 +522,32 @@ def nmt(Y_, X_, noise, threshold, mode = "Mean"):
                     if sum(valid) != 0:
                         X[j,i] = sum( neighbours_X0*valid )/sum(valid) 
                         Y[j,i] = sum( neighbours_Y0*valid )/sum(valid) 
+        ret = Y, X, result
 
-                    # X[j,i] = means_X[j,i]
-                    # Y[j,i] = means_Y[j,i]
+    if polar:
+        # lo cambio por el promedio
+        for j in range(1, l-1):
+            for i in range(1, l-1):
+                if result_polar[j,i] == 1:
                     
-        # X[:,0], X[:,-1], X[-1,:], X[0,:]  = np.zeros(l), np.zeros(l), np.zeros(l), np.zeros(l)
-        # Y[:,0], Y[:,-1], Y[-1,:], Y[0,:]  = np.zeros(l), np.zeros(l), np.zeros(l), np.zeros(l)
+                    neighbours_X0 = X[j-1:j+2 , i-1:i+2].flatten()
+                    neighbours_Y0 = Y[j-1:j+2 , i-1:i+2].flatten()
+                    valid = 1 - result[j-1:j+2 , i-1:i+2].flatten()
+                    
+                    if sum(valid) != 0:
+                        X[j,i] = sum( neighbours_X0*valid )/sum(valid) 
+                        Y[j,i] = sum( neighbours_Y0*valid )/sum(valid) 
+
+
         X[:,0], X[:,-1], X[-1,:], X[0,:]  = X[:,0]*(1-result[:,0]), X[:,-1]*(1-result[:,-1]), X[-1,:]*(1-result[-1,:]), X[0,:]*(1-result[0,:])
         Y[:,0], Y[:,-1], Y[-1,:], Y[0,:]  = Y[:,0]*(1-result[:,0]), Y[:,-1]*(1-result[:,-1]), Y[-1,:]*(1-result[-1,:]), Y[0,:]*(1-result[0,:])
 
-    return Y, X, result
+        ret = Y, X, result_polar
+    
+    return ret
 
 
-def traction( Y, X, ps, ws, E, nu, lam, Lcurve = False ):
+def traction( Y, X, ps, ws = 2.5*1e-6, E = 31.6*1e3, nu = 0.5, lam = -1, Lcurve = False ):
     """
     Parameters
     ----------
@@ -528,7 +564,8 @@ def traction( Y, X, ps, ws, E, nu, lam, Lcurve = False ):
     nu : float
         posson ratio of the hidrogel
     lam : float
-        regularization parameter
+        regularization parameter, if lam < 0 
+        computes the traction without renormalization
 
     Returns
     -------
@@ -574,7 +611,7 @@ def traction( Y, X, ps, ws, E, nu, lam, Lcurve = False ):
     
         Tvx0 = Kxx*( Ttx + imaginator*Ttx_im  ) + K_*( Tty + imaginator*Tty_im ) 
         Tvy0 = K_*( Ttx + imaginator*Ttx_im  ) + Kyy*( Tty + imaginator*Tty_im )     
-        vx0, vy0 = np.fft.ifft2( Tvx0 ), np.fft.ifft2( Tvy0 )  
+        vx, vy = np.fft.ifft2( Tvx0 ), np.fft.ifft2( Tvy0 )  
       
     elif lam < 0:
         
@@ -593,16 +630,16 @@ def traction( Y, X, ps, ws, E, nu, lam, Lcurve = False ):
         Tvy = Ttx*K_ + Tty*Kyy
 
         tx, ty = np.fft.ifft2( Ttx ), np.fft.ifft2( Tty  )
-        vx0, vy0 = np.fft.ifft2( Tvx ), np.fft.ifft2( Tvy  )
+        vx, vy = np.fft.ifft2( Tvx ), np.fft.ifft2( Tvy  )
         
     if Lcurve == False:
         result = ty, tx    
     else:
-        result = ty, tx, vy0, vx0
+        result = ty, tx, vy, vx
     
     return result
 
-def deformation( ty, tx, ws, E, nu ):
+def deformation( ty, tx, ws = 2.5e-6, E = 31.6*1e3, nu = 0.5 ):
     l = tx.shape[0]
 
     Ftx, Fty = np.fft.fft2( tx - np.mean(tx) ), np.fft.fft2( ty - np.mean(ty) ) # FFT de la tracción

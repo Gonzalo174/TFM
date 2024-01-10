@@ -215,7 +215,7 @@ def desvio_por_plano(stack):
         desvios[z] = np.std( stack[z] )
     return normalizar( desvios )
 
-def border(img, y0, k = 3):
+def border(img, y0 = 512, k = 3):
     vecinos = [[-1,-1],[-1,0],[-1,1],[0,1],[1,1],[1,0],[1,-1],[0,-1]]
     mascara = np.zeros(img.shape)
     img_s = smooth( img, k )
@@ -225,7 +225,7 @@ def border(img, y0, k = 3):
     x_borde = [    ]
     j = 0
     while len(x_borde) == 0:
-        if mascara[600,j] == 1:
+        if mascara[y0,j] == 1:
             x_borde.append(j-1)
         j += 1    
 
@@ -279,7 +279,43 @@ def anti_interpolate( array_ ):
     return array
 
 
-def celula( N, line, place = 'home' ):
+def busca_lambda( Y, X, ps, l1 = 1e-22, l2 = 1e-18, N = 100, ws = 2.5*1e-6, E = 31.6*1e3, nu = 0.5, norma = True):
+    l_list = np.logspace( np.log10(l1), np.log10(l2), N )
+    tr_list = np.zeros( N )
+    duvr_list = np.zeros( N )
+    
+    for n in range(N):
+        ty, tx, vy, vx = TFM.traction( Y, X, ps, ws, E, nu, l_list[n], Lcurve = True )
+        uy, ux = Y*ps, X*ps
+        duvy, duvx = uy - vy, ux - vx
+        
+        tr = np.sqrt( np.real(tx)**2 + np.real(ty)**2 ) 
+        duvr =  np.sqrt( np.real(duvx)**2 + np.real(duvy)**2  )
+
+        tr_list[n] = np.sum(tr)
+        duvr_list[n] = np.sum(duvr)   
+        
+    if norma:
+        tr_list = normalizar(tr_list)
+        duvr_list = normalizar(duvr_list)
+
+    D = np.diff( tr_list )/np.diff( duvr_list )
+    m1, m2 = np.mean( D[:int(N/10)] ) , np.mean( D[-int(N/10 + 1):] )
+    b1, b2 = np.mean( tr_list[:int(N/10)] - m1*duvr_list[:int(N/10)] ) , np.mean( tr_list[-int(N/10 + 1):] - m2*duvr_list[-int(N/10 + 1):] ) 
+    duvL = -(b1 - b2)/(m1 - m2)
+    tL = m1*duvL + b1           
+    NlL = np.argmin(  (tr_list - tL)**2 + (duvr_list - duvL)**2  )
+
+    if not norma:
+        tr_list = normalizar(tr_list)
+        duvr_list = normalizar(duvr_list)    
+
+    return NlL, l_list, tr_list, duvr_list
+
+def R(X, Y):
+    return np.sqrt( np.real(X)**2 + np.real(Y)**2 )
+
+def celula( N, line, place = 'home', trans = False, D_pp = 0 ):
     if place == 'home':
         path = r"C:\Users\gonza\1\Tesis\2023\\"
     else:    
@@ -302,7 +338,7 @@ def celula( N, line, place = 'home' ):
         stack_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[0]
         stack_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[-1]+".oif" )[0]
         celula_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[1,2]
-        celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[-1]+".oif" )[1, 2 + pre_post7[N][0] - pre_post7[N][1] ]
+        # celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[-1]+".oif" )[1, 2 + pre_post7[N][0] - pre_post7[N][1] ]
         mascara = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF7\\" + name + "_m_00um.png")
         if mascara[1,1] == 1:
             mascara = 1 - mascara
@@ -313,30 +349,31 @@ def celula( N, line, place = 'home' ):
         if mascara20[1,1] == 1:
             mascara20 = 1 - mascara20        
         
-        pre = stack_pre[ pre_post7[N][0] ]
+        pre = stack_pre[ pre_post7[N][0] + D_pp ]
         
         if N == (8,3):  
-            post = TFM.correct_driff( stack_post[ pre_post7[N][1] ], pre, 300 )
+            post = TFM.correct_driff( stack_post[ pre_post7[N][1] + D_pp ], pre, 300 )
         elif N == (7,1):  
-            post = TFM.unrotate( stack_post[ pre_post7[N][1] ], pre, 50, exploration_angle = 1)
+            post = TFM.unrotate( stack_post[ pre_post7[N][1] + D_pp ], pre, 50, exploration_angle = 1)
         elif N == (4,1):
             pre = np.concatenate( ( pre, np.ones([4, 1024])*np.mean(pre) ), axis = 0  )
-            post = TFM.correct_driff( stack_post[ pre_post7[N][1] ], pre, 50 )
+            post = TFM.correct_driff( stack_post[ pre_post7[N][1] + D_pp ], pre, 50 )
         elif N == (3,3):  
-            post = TFM.unrotate( stack_post[ pre_post7[N][1] ], pre, 50, exploration_angle = 1)    
+            post = TFM.unrotate( stack_post[ pre_post7[N][1] + D_pp ], pre, 50, exploration_angle = 1)    
         else:
-            post = TFM.correct_driff( stack_post[ pre_post7[N][1] ], pre, 50 )
+            post = TFM.correct_driff( stack_post[ pre_post7[N][1] + D_pp ], pre, 50 )
             
         if N == (1,1):
             delta = 4
-            pre_profundo = stack_pre[ pre_post7[N][0] + delta ]
-            post_profundo = TFM.correct_driff( stack_post[ pre_post7[N][1] + delta ], pre_profundo, 50 )
+            pre_profundo = stack_pre[ pre_post7[N][0] + D_pp + delta ]
+            post_profundo = TFM.correct_driff( stack_post[ pre_post7[N][1] + D_pp + delta ], pre_profundo, 50 )
             
             sat = busca_manchas(pre)
             
             pre = pre*(1-sat) + pre_profundo*sat
             post = post*(1-sat) + post_profundo*sat
-    
+        
+        print(pre_post7[N])
 
     if line == 'MCF10':
         carpetas = ["23.10.05 - gon MCF10 1 - A04", "23.10.05 - gon MCF10 2 - D04", "23.10.05 - gon MCF10 3 - E04", "23.10.06 - gon MCF10 4 - C04", "23.10.19 - gon MCF10 6 - G18", "23.10.20 - gon MCF10 7 - I18" ]
@@ -357,26 +394,34 @@ def celula( N, line, place = 'home' ):
         stack_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[0]
         stack_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[-1]+".oif" )[0]
         celula_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[1,2]
-        celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[0]+".oif" )[1,2+pre10[N-1]-post10[N-1]]
+        # celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[0]+".oif" )[1,2+pre10[N-1]-post10[N-1]]
         mascara = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_00um.csv")
         mascara10 = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_10um.csv")
         mascara20 = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_20um.csv")
 
-        pre = stack_pre[ pre10[N-1] ]
-        post = TFM.correct_driff( stack_post[ post10[N-1] ], pre, 50 )
+        pre = stack_pre[ pre10[N-1] + D_pp ]
+        post = TFM.correct_driff( stack_post[ post10[N-1] + D_pp ], pre, 50 )
         
         if N == 1 or N == 4 or N == 8 or N == 14 or N == 15 or N == 17 or N == 18:
             delta = 4
             if N == 1 or N == 17:
                 delta = 6
-            pre_profundo = stack_pre[ pre10[N-1] + delta ]
-            post_profundo = TFM.correct_driff( stack_post[ post10[N-1] + delta ], pre_profundo, 50 )
+            pre_profundo = stack_pre[ pre10[N-1] + D_pp + delta ]
+            post_profundo = TFM.correct_driff( stack_post[ post10[N-1] + D_pp + delta ], pre_profundo, 50 )
             sat = busca_manchas(pre, 700)
             pre = pre*(1-sat) + pre_profundo*sat
             post = post*(1-sat) + post_profundo*sat    
 
-    return pre, post, mascara, mascara10, mascara20, pixel_size
+        print(pre10[N], post10[N])
+    # print(len(stack_pre),len(stack_post))
+    
+    if trans:
+        ret = pre, post, celula_pre, mascara, mascara10, mascara20, pixel_size
 
+    if not trans:
+        ret = pre, post, mascara, mascara10, mascara20, pixel_size
+
+    return ret
 
 
 

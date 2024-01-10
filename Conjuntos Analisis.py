@@ -7,9 +7,8 @@ Created on Mon Dec 25 10:08:50 2023
 
 import numpy as np
 import matplotlib.pyplot as plt
-import imageio.v3 as iio
-import oiffile as of
 import os
+import pandas as pd
 
 import TFM
 import auxi
@@ -28,13 +27,13 @@ c0 = (0.122, 0.467, 0.706)
 c1 = (1.000, 0.498, 0.055)
 c2 = (0.173, 0.627, 0.173)
 c3 = (0.839, 0.152, 0.157)
-colores = [c0, c1, c2, c3]
+colores = [c2, c3, c0, c1]
 
 cm0 = ListedColormap( [(1, 1, 1), (0.122, 0.467, 0.706) ] )
 cm1 = ListedColormap( [(1, 1, 1), (1.000, 0.498, 0.055) ] )
 cm2 = ListedColormap( [(1, 1, 1), (0.173, 0.627, 0.173) ] )
 cm3 = ListedColormap( [(1, 1, 1), (0.839, 0.152, 0.157) ] )
-color_maps = [cm0, cm1, cm2, cm3]
+color_maps = [cm2, cm3, cm0, cm1]
 
 #%% Parámetros de ploteo
 
@@ -57,15 +56,199 @@ linea_muestra = [ 'MCF10', 'MCF10', 'MCF7', 'MCF7' ]
 # valores de A?
 # valores de exploración?
 
-#%% PIV
+#%%
 
-pre, post, mascara, mascara10, mascara20, ps = auxi.celula( (11,4), 'MCF7', place = 'home' )
+cel = []
+suero_ = []
+linea_ = []
+
+defo = []
+fuer = []
+cant = []
+area = []
+
+
+for index in range(4):
+    lista = conjuntos[index]
+    if index == 0 or index == 2:
+        suero = 'CS'
+    if index == 1 or index == 3:
+        suero = 'SS'    
+    
+    if index == 0 or index == 1:
+        linea = 'MCF10'
+    if index == 2 or index == 3:
+        linea = 'MCF7'    
+        
+    for N in lista:
+        pre, post, mascara, mascara10, mascara20, ps = auxi.celula( N, linea )
+
+        ws, exp = 2.5, int(0.7/ps)
+        A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
+        if N == 22 or N == 25:
+            exp = int(1/ps)
+        
+        dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = exp, mode = "Smooth3", A = A1)
+        Y_0, X_0 = deformacion 
+        x, y = dominio
+        Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
+        X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
+        R_s = np.sqrt( X_s**2 + Y_s**2 )
+
+        plt.figure(figsize = [6,4] )
+        plt.imshow( mascara, cmap = color_maps[0], alpha = 0.5 )
+        plt.imshow( mascara10, cmap = color_maps[0], alpha = 0.5 )
+
+        # plt.quiver(x,y,X_0,-Y_0, res, cmap = cm_crimson, scale = 100, pivot='tail')
+        # plt.quiver(x,y,X_nmt,-Y_nmt, scale = 100, pivot='tail')
+        plt.quiver(x,y,X_s,-Y_s, scale = 100, pivot='tail')
+
+        # auxi.barra_de_escala( 10, sep = 1.5, pixel_size = ps, font_size = 11, color = 'k', more_text = linea, a_lot_of_text = suero )
+        auxi.barra_de_escala( 10, sep = 1.5, pixel_size = ps, font_size = 11, color = 'k', more_text = linea, a_lot_of_text = str(N) )
+
+        plt.xlim([0,1023])
+        plt.ylim([1023,0])
+        plt.show()
+        
+        
+        E, nu = 31.6, 0.5      # kPa
+
+        lam = 0
+        uX, uY = X_s, Y_s
+        x_plot, y_plot = x, y
+
+        ty, tx, vy0, vx0 = TFM.traction(uY, uX, ps*1e-6, ws*1e-6, E*1e3, nu, lam, Lcurve = True)
+        ty, tx = TFM.smooth(ty,3), TFM.smooth(tx,3)
+        tr = np.sqrt( np.abs(ty)**2 + np.abs(tx)**2 )
+
+        plt.figure(figsize = [6,4] )
+        plt.quiver(x_plot, y_plot, tx, -ty, scale = 20000)
+        plt.imshow( mascara, cmap = color_maps[0], alpha = 0.5 )
+        auxi.barra_de_escala( 10, sep = 1.5, pixel_size = ps, font_size = '11', color = 'k', more_text = 'T' )
+        plt.xlim([0,1023])
+        plt.ylim([1023,0])        
+        
+        
+        cel.append(N)
+        suero_.append(suero)
+        linea_.append(linea)
+
+        defo.append( np.sum( R_s*auxi.reshape_mask(mascara10, x, y) )  )
+        fuer.append( np.sum( tr*auxi.reshape_mask(mascara10, x, y) )  )
+        cant.append( np.sum( auxi.reshape_mask(mascara10, x, y) ) )
+        area.append( np.sum( auxi.reshape_mask(mascara, x, y) )*ps**2 )
+        
+
+
+#%%
+
+data = pd.DataFrame()
+
+
+data["Celula"] = cel
+data["Area"] = area
+data["N"] = cant
+
+data["Deformación"] = defo
+data["Tracción"] = fuer
+data["Suero"] = suero_
+data["Linea"] = linea_
+
+
+data.to_csv( "data0.csv" )
+
+
+#%%
+
+df = pd.read_csv( r"C:\Users\gonza\1\Tesis\TFM\data0.csv", index_col = 'Celula')
+df10 = df.loc[ df["Linea"] == 'MCF10' ]
+df7 = df.loc[ df["Linea"] == 'MCF7' ]
+
+# key = 'Tracción'
+key = "Deformación"
+defo = [ df10.loc[ df10["Suero"] == 'CS' ][key].values, df10.loc[ df10["Suero"] == 'SS' ][key].values, df7.loc[ df7["Suero"] == 'CS' ][key].values, df7.loc[ df7["Suero"] == 'SS' ][key].values]
+
+key = "Tracción"
+trac = [ df10.loc[ df10["Suero"] == 'CS' ][key].values, df10.loc[ df10["Suero"] == 'SS' ][key].values, df7.loc[ df7["Suero"] == 'CS' ][key].values, df7.loc[ df7["Suero"] == 'SS' ][key].values]
+
+key = "N"
+n = [ df10.loc[ df10["Suero"] == 'CS' ][key].values, df10.loc[ df10["Suero"] == 'SS' ][key].values, df7.loc[ df7["Suero"] == 'CS' ][key].values, df7.loc[ df7["Suero"] == 'SS' ][key].values]
+
+conjuntos = []
+for i in range(4):
+    conjuntos.append( defo[i]/n[i] )
+
+plt.rcParams['font.size'] = 11
+
+plt.figure( figsize = [6,6] )
+sns.boxplot(  conjuntos, color = colores[0]  )
+plt.grid(True)
+plt.xticks([0,1,2,3], ['']*4)#['10CS','10SS','7CS','7SS'] )
+delta0 = 0.05
+delta1 = -0.5
+plt.text(0-delta0, delta1, 'MCF10', rotation=90, va='top', ha='center', color='k', fontsize=11)
+plt.text(0+delta0, delta1, 'con suero', rotation=90, va='top', ha='center', color='k', fontsize=11)
+plt.text(1-delta0, delta1, 'MCF10', rotation=90, va='top', ha='center', color='k', fontsize=11)
+plt.text(1+delta0, delta1, 'sin suero', rotation=90, va='top', ha='center', color='k', fontsize=11)
+plt.text(2-delta0, delta1, 'MCF7', rotation=90, va='top', ha='center', color='k', fontsize=11)
+plt.text(2+delta0, delta1, 'con suero', rotation=90, va='top', ha='center', color='k', fontsize=11)
+plt.text(3-delta0, delta1, 'MCF7', rotation=90, va='top', ha='center', color='k', fontsize=11)
+plt.text(3+delta0, delta1, 'sin suero', rotation=90, va='top', ha='center', color='k', fontsize=11)
+
+# plt.xticks([0,1,2,3], ['MCF7SS','MCF7CS','MCF10SS','MCF10CS'])
+# plt.ylabel( "Deformación promedio [µm]" )
+plt.ylabel( "Deformación promedio [px]" )
+# plt.ylabel( "Tracción promedio [Pa]" )
+
+# plt.ylim([-0.01,0.26])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#%%
 
 ws = 2.5
-bordes_extra = 8
+desvios_bin, limit = auxi.busca_esferas( pre, ps, ws, 0.8 )
+plt.figure( figsize = [6, 6] )
+plt.imshow( pre[ :limit , :limit ], cmap = cm_crimson, vmin = 150, vmax = 600 )
+plt.imshow( 1-desvios_bin, cmap = 'gray', alpha = 0.09, extent = [0,limit,limit,0])
+auxi.barra_de_escala( 10, sep = 2, pixel_size = ps )
+print(  np.mean(desvios_bin) )
+
+
+
+
+
+
+
+#%% PIV
+
+pre, post, mascara, mascara10, mascara20, ps = auxi.celula( 25, 'MCF10', place = 'home' )
+
+ws, exp = 2.5, 1#0.7
+modo = 'Fit'
 
 A1 = auxi.busca_A( pre, 0.75, ps, win = 2.5, A0 = 0.85 )
-dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = bordes_extra, mode = "Smooth3", A = A1)
+dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = modo, A = A1)
 Y_0, X_0 = deformacion 
 x, y = dominio
 Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)    # NMT para el ángulo?
@@ -76,12 +259,12 @@ X_s2, Y_s2 = TFM.smooth(  X_nmt*auxi.reshape_mask(mascara10, x, y)  ,3), TFM.smo
 
 
 plt.figure(figsize = [6,4] )
-plt.imshow( mascara, cmap = color_maps[0], alpha = 0.5 )
-plt.imshow( mascara10, cmap = color_maps[0], alpha = 0.5 )
+plt.imshow( mascara, cmap = color_maps[2], alpha = 0.5 )
+plt.imshow( mascara10, cmap = color_maps[2], alpha = 0.5 )
 
-# plt.quiver(x,y,X_0,-Y_0, res, cmap = cm_crimson, scale = 100, pivot='tail')
+plt.quiver(x,y,X_0,-Y_0, res, cmap = cm_crimson, scale = 100, pivot='tail')
 # plt.quiver(x,y,X_nmt,-Y_nmt, scale = 100, pivot='tail')
-plt.quiver(x,y,X_s,-Y_s, scale = 100, pivot='tail')
+# plt.quiver(x,y,X_s,-Y_s, scale = 100, pivot='tail')
 
 auxi.barra_de_escala( 10, sep = 1.5,  font_size = 11, color = 'k' )
 plt.xlim([0,1023])
@@ -92,7 +275,7 @@ plt.show()
 nu = 0.5
 E = 31.6      # kPa
 
-lam = -1#3*1e-20
+lam = 6*1e-20
 # uX, uY = X_nmt, Y_nmt
 uX, uY = X_s, Y_s
 # uX, uY = X_s2, Y_s2
@@ -161,9 +344,9 @@ plt.plot( b[1], b[0], c = 'w', ls = 'dashed', lw = 0.75 )
 
 #%% Exploracion del espacio de lambda
 
-ws, exp, A1 = 2.5, 10, 0#auxi.busca_A( pre, 0.75, ps, win = 2.5, A0 = 0.85 )
+ws, exp, A1 = 2.5, 1, auxi.busca_A( pre, 0.75, ps, win = 2.5, A0 = 0.85 )
 
-dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = exp, mode = "Smooth3", A = A1)
+dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Smooth3", A = A1)
 Y_0, X_0 = deformacion 
 x, y = dominio
 Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)    # NMT para el ángulo?
@@ -282,140 +465,6 @@ the size of a regularized solution and its fit to the given data,
 as the regularization parameter varies.
 
 '''
-
-
-#%%
-
-cel = []
-suero_ = []
-linea_ = []
-
-defo = []
-fuer = []
-cant = []
-area = []
-
-
-for index in range(4):
-    lista = conjuntos[index]
-    if index == 0 or index == 2:
-        suero = 'CS'
-    if index == 1 or index == 3:
-        suero = 'SS'    
-    
-    if index == 0 or index == 1:
-        linea = 'MCF10'
-    if index == 2 or index == 3:
-        linea = 'MCF7'    
-        
-    for N in lista:
-        pre, post, mascara, mascara10, mascara20, ps = auxi.celula( N, linea )
-
-        ws, exp = 2.5, int(0.7/ps)
-        A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
-        if N == 22 or N == 25:
-            exp = int(1/ps)
-        
-        dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = exp, mode = "Smooth3", A = A1)
-        Y_0, X_0 = deformacion 
-        x, y = dominio
-        Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
-        X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
-        R_s = np.sqrt( X_s**2 + Y_s**2 )
-
-        plt.figure(figsize = [6,4] )
-        plt.imshow( mascara, cmap = color_maps[0], alpha = 0.5 )
-        plt.imshow( mascara10, cmap = color_maps[0], alpha = 0.5 )
-
-        # plt.quiver(x,y,X_0,-Y_0, res, cmap = cm_crimson, scale = 100, pivot='tail')
-        # plt.quiver(x,y,X_nmt,-Y_nmt, scale = 100, pivot='tail')
-        plt.quiver(x,y,X_s,-Y_s, scale = 100, pivot='tail')
-
-        auxi.barra_de_escala( 10, sep = 1.5, pixel_size = ps, font_size = 11, color = 'k', more_text = linea, a_lot_of_text = suero )
-        plt.xlim([0,1023])
-        plt.ylim([1023,0])
-        plt.show()
-        
-        
-        E, nu = 31.6, 0.5      # kPa
-
-        lam = 0
-        uX, uY = X_s, Y_s
-        x_plot, y_plot = x, y
-
-        ty, tx, vy0, vx0 = TFM.traction(uY, uX, ps*1e-6, ws*1e-6, E*1e3, nu, lam, Lcurve = True)
-        ty, tx = TFM.smooth(ty,3), TFM.smooth(tx,3)
-        tr = np.sqrt( np.abs(ty)**2 + np.abs(tx)**2 )
-
-        plt.figure(figsize = [6,4] )
-        plt.quiver(x_plot, y_plot, tx, -ty, scale = 20000)
-        plt.imshow( mascara, cmap = color_maps[0], alpha = 0.5 )
-        auxi.barra_de_escala( 10, sep = 1.5, pixel_size = ps, font_size = '11', color = 'k', more_text = 'T' )
-        plt.xlim([0,1023])
-        plt.ylim([1023,0])        
-        
-        
-        cel.append(N)
-        suero_.append(suero)
-        linea_.append(linea)
-
-        defo.append( np.sum( R_s*auxi.reshape_mask(mascara10, x, y) )  )
-        fuer.append( np.sum( tr*auxi.reshape_mask(mascara10, x, y) )  )
-        cant.append( np.sum( auxi.reshape_mask(mascara10, x, y) ) )
-        area.append( np.sum( auxi.reshape_mask(mascara, x, y) )*ps**2 )
-        
-
-
-#%%
-
-data = pd.DataFrame()
-
-
-data["Celula"] = cel
-data["Area"] = area
-data["N"] = cant
-
-data["Deformación"] = defo
-data["Tracción"] = fuer
-data["Suero"] = suero_
-data["Linea"] = linea_
-
-
-data.to_csv( "data0.csv" )
-
-
-
-#%%
-
-ws = 2.5
-desvios_bin, limit = auxi.busca_esferas( pre, ps, ws, 0.8 )
-plt.figure( figsize = [6, 6] )
-plt.imshow( pre[ :limit , :limit ], cmap = cm_crimson, vmin = 150, vmax = 600 )
-plt.imshow( 1-desvios_bin, cmap = 'gray', alpha = 0.09, extent = [0,limit,limit,0])
-auxi.barra_de_escala( 10, sep = 2, pixel_size = ps )
-print(  np.mean(desvios_bin) )
-
-
-
-
-
-
-
-#%% 4 furiosos
-
-pre_0, post_0, mascara_0, mascara10_0, mascara20_0, pixel_size_0 = auxi.celula( muestra[0], linea_muestra[0], place = 'home' )
-pre_1, post_1, mascara_1, mascara10_1, mascara20_1, pixel_size_1 = auxi.celula( muestra[1], linea_muestra[1], place = 'home' )
-pre_2, post_2, mascara_2, mascara10_2, mascara20_2, pixel_size_2 = auxi.celula( muestra[2], linea_muestra[2], place = 'home' )
-pre_3, post_3, mascara_3, mascara10_3, mascara20_3, pixel_size_3 = auxi.celula( muestra[3], linea_muestra[3], place = 'home' )
-
-
-
-
-
-
-
-
-
 
 
 
