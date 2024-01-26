@@ -19,10 +19,10 @@ def barra_de_escala( scale_length, pixel_size = 0.1007, scale_unit = 'µm', loc 
     for i in np.arange(0, -sep/pixel_size, -0.1):
         plt.plot([ img_len - sep/pixel_size - scale_pixels, img_len - sep/pixel_size ], [img_len - sep/pixel_size + i, img_len - sep/pixel_size + i], color=color, linewidth = 2)
     if text:
-        plt.text(img_len - sep/pixel_size - scale_pixels/2, img_len - 3*sep/pixel_size , f'{scale_length} {scale_unit}', color=color, weight='bold', ha='center', va = 'bottom', fontsize = font_size )
+        plt.text(img_len - sep/pixel_size - scale_pixels/2, img_len - 3*sep/pixel_size , f'{scale_length} {scale_unit}', color=color, weight='bold', ha='center', va = 'bottom')#, fontsize = font_size )
 
     if more_text != '':    
-        plt.text(img_len - sep/pixel_size/2, sep/pixel_size , more_text, color=color, weight='bold', ha='right', va = 'top', fontsize = font_size )
+        plt.text(img_len - sep/pixel_size/2, sep/pixel_size , more_text, color=color, weight='bold', ha='right', va = 'top', fontsize = font_size)#, fontstyle = 'italic' )
     if a_lot_of_text != '':
         plt.text(sep/pixel_size, img_len - sep/pixel_size/2 , a_lot_of_text, color=color, weight='bold', ha='left', va = 'bottom', fontsize = font_size )
 
@@ -68,6 +68,44 @@ def busca_manchas(img, th = 1000):
     sat[ img > th ] = 1
     sat = area_upper(sat, kernel_size = 20, threshold = 0.1)
     return sat
+
+def busca_lambda( Y, X, ps, l1 = 1e-22, l2 = 1e-18, N = 100, ws = 2.5*1e-6, E = 31.6*1e3, nu = 0.5, norma = True, solo_lambda = False):
+    l_list = np.logspace( np.log10(l1), np.log10(l2), N )
+    tr_list = np.zeros( N )
+    duvr_list = np.zeros( N )
+    
+    for n in range(N):
+        ty, tx, vy, vx = TFM.traction( Y, X, ps, ws, E, nu, l_list[n], Lcurve = True )
+        uy, ux = Y*ps, X*ps
+        duvy, duvx = uy - vy, ux - vx
+        
+        tr = np.sqrt( np.real(tx)**2 + np.real(ty)**2 ) 
+        duvr =  np.sqrt( np.real(duvx)**2 + np.real(duvy)**2  )
+
+        tr_list[n] = np.sum(tr)
+        duvr_list[n] = np.sum(duvr)   
+        
+    if norma:
+        tr_list = normalizar(tr_list)
+        duvr_list = normalizar(duvr_list)
+
+    D = np.diff( tr_list )/np.diff( duvr_list )
+    m1, m2 = np.mean( D[:int(N/10)] ) , np.mean( D[-int(N/10 + 1):] )
+    b1, b2 = np.mean( tr_list[:int(N/10)] - m1*duvr_list[:int(N/10)] ) , np.mean( tr_list[-int(N/10 + 1):] - m2*duvr_list[-int(N/10 + 1):] ) 
+    duvL = -(b1 - b2)/(m1 - m2)
+    tL = m1*duvL + b1           
+    NlL = np.argmin(  (tr_list - tL)**2 + (duvr_list - duvL)**2  )
+
+    if not norma:
+        tr_list = normalizar(tr_list)
+        duvr_list = normalizar(duvr_list)    
+        
+    ret = NlL, l_list, tr_list, duvr_list
+    
+    if solo_lambda:
+        ret = l_list[NlL]
+
+    return ret
 
 def round_pro(array2D):
     """
@@ -278,42 +316,29 @@ def anti_interpolate( array_ ):
             array[j,i] = array_[2*j,2*i]    
     return array
 
-
-def busca_lambda( Y, X, ps, l1 = 1e-22, l2 = 1e-18, N = 100, ws = 2.5*1e-6, E = 31.6*1e3, nu = 0.5, norma = True):
-    l_list = np.logspace( np.log10(l1), np.log10(l2), N )
-    tr_list = np.zeros( N )
-    duvr_list = np.zeros( N )
-    
-    for n in range(N):
-        ty, tx, vy, vx = TFM.traction( Y, X, ps, ws, E, nu, l_list[n], Lcurve = True )
-        uy, ux = Y*ps, X*ps
-        duvy, duvx = uy - vy, ux - vx
-        
-        tr = np.sqrt( np.real(tx)**2 + np.real(ty)**2 ) 
-        duvr =  np.sqrt( np.real(duvx)**2 + np.real(duvy)**2  )
-
-        tr_list[n] = np.sum(tr)
-        duvr_list[n] = np.sum(duvr)   
-        
-    if norma:
-        tr_list = normalizar(tr_list)
-        duvr_list = normalizar(duvr_list)
-
-    D = np.diff( tr_list )/np.diff( duvr_list )
-    m1, m2 = np.mean( D[:int(N/10)] ) , np.mean( D[-int(N/10 + 1):] )
-    b1, b2 = np.mean( tr_list[:int(N/10)] - m1*duvr_list[:int(N/10)] ) , np.mean( tr_list[-int(N/10 + 1):] - m2*duvr_list[-int(N/10 + 1):] ) 
-    duvL = -(b1 - b2)/(m1 - m2)
-    tL = m1*duvL + b1           
-    NlL = np.argmin(  (tr_list - tL)**2 + (duvr_list - duvL)**2  )
-
-    if not norma:
-        tr_list = normalizar(tr_list)
-        duvr_list = normalizar(duvr_list)    
-
-    return NlL, l_list, tr_list, duvr_list
-
 def R(X, Y):
     return np.sqrt( np.real(X)**2 + np.real(Y)**2 )
+
+def crea_tabla(conjuntos, test, label = ' ', d = 4):
+    l = len(conjuntos)
+    m = np.zeros([l]*2)
+    for j in range(l):
+        for i in range(l):
+            valor = test( conjuntos[i], conjuntos[j] )[1]
+            m[j,i] = int( valor*10**d )/10**d 
+            m[i,j] = int( valor*10**d )/10**d
+            # m[j,i] = np.round( valor, d ) 
+            # m[i,j] = np.round( valor, d )
+    
+    line1 = "\\begin{table}[H] \n   \\centering \n   \\begin{tabular}{|c|c|c|c|c|}\hline \n"
+    line2 = "    &   10CS  &   10SS  &   7CS  &   7SS   \\\ \\hline \n"
+    line3 = "    10CS&           1           &  " + str(m[0,1]) + " & " + str(m[0,2]) + " & " + str(m[0,3]) + "  \\\ \hline \n"
+    line4 = "    10SS& " + str(m[1,0]) + "   &            1         & " + str(m[1,2]) + " & " + str(m[1,3]) + "  \\\ \hline \n"
+    line5 = "     7CS& " + str(m[2,0]) + "   &  " + str(m[2,1]) + " &           1         & " + str(m[2,3]) + "  \\\ \hline \n"
+    line6 = "     7SS& " + str(m[3,0]) + "   &  " + str(m[3,1]) + " & " + str(m[3,2]) + " &         1            \\\ \hline \n"
+    line7 = "    \\end{tabular} \n    \\caption{ " + label + " } \n    \\label{tab:" + label + "} \n\\end{table}  "
+   
+    return np.round(m,d), line1 + line2 + line3 + line4 + line5 + line6 + line7
 
 def celula( N, line, place = 'home', trans = False, D_pp = 0 ):
     if place == 'home':

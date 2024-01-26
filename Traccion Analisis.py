@@ -134,9 +134,11 @@ for i in range(4):
 
 
 #%% Campo y celula
-i = 2
+i = 3
 pre, post, transmision, mascara, mascara10, mascara20, ps = auxi.celula( muestra[2], linea_muestra[2], place = 'home', trans = True )
+# bor = auxi.border(mascara)
 ws, exp = 2.5, 0.7
+
 
 A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
 dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Fit", A = A1)
@@ -149,8 +151,8 @@ x_plot, y_plot = x, y
 # fondo = auxi.median_blur(transmision, 50)
 # celula = transmision - fondo
 # bor = auxi.border(mascara)
-
-plt.figure( figsize = [7,7], layout = 'compressed' )
+i = 2
+plt.figure( figsize = [8,8], layout = 'compressed' )
 
 # Trans 
 plt.subplot(1,3,1)
@@ -162,14 +164,16 @@ plt.ylim([1023,0])
 
 # U
 plt.subplot(1,3,2)
-plt.quiver(x_plot, y_plot, X_nmt*ps*1e-6, -Y_nmt*ps*1e-6, scale = 0.00001)
+# plt.quiver(x_plot, y_plot, X_nmt*ps*1e-6, -Y_nmt*ps*1e-6, scale = 0.00001)
+plt.quiver(x_plot, y_plot, X_s*ps*1e-6, -Y_s*ps*1e-6, scale = 0.00001)
 plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
 auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '10', color = 'k', more_text = 'u' )
 plt.xlim([0,1023])
 plt.ylim([1023,0])
 
 E, nu = 31.6, 0.5  # kPa, adim
-ty, tx, vy, vx = TFM.traction(Y_nmt, X_nmt, ps*1e-6, ws*1e-6, E*1e3, nu, -1, Lcurve = True)
+# ty, tx, vy, vx = TFM.traction(Y_nmt, X_nmt, ps*1e-6, ws*1e-6, E*1e3, nu, -1, Lcurve = True)
+ty, tx, vy, vx = TFM.traction(Y_s, X_s, ps*1e-6, ws*1e-6, E*1e3, nu, -1, Lcurve = True)
 plt.subplot(1,3,3)
 plt.quiver(x_plot, y_plot, tx, -ty, scale = 40000)
 # plt.quiver(x_plot, y_plot, tx*auxi.reshape_mask(mascara20, x, y), -ty*auxi.reshape_mask(mascara20, x, y), scale = 20000)

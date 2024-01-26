@@ -56,11 +56,11 @@ linea_muestra = [ 'MCF10', 'MCF10', 'MCF7', 'MCF7' ]
 
 #%% NMT polar
 
-cel = 1
+cel = 3
 pre, post, celula, mascara, mascara10, mascara20, ps = auxi.celula( muestra[cel], linea_muestra[cel], place = 'home', trans = True, D_pp = 0 )
 b = auxi.border(mascara)
 
-ws, exp = 2, 0.7
+ws, exp = 2.5, 0.7
 E, nu = 31.6, 0.5  # kPa, adim
 
 A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
@@ -71,12 +71,37 @@ Y_0, X_0 = deformacion
 #%%
 Y_nmtP, X_nmtP, resP = TFM.nmt(*deformacion, 0.2, 2.5, polar = True)
 Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 2.5, polar = False)
+X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
 
 plt.quiver(x, y, X_0, -Y_0, res + resP, cmap = 'viridis', scale = 300)
 plt.imshow( mascara, cmap = color_maps[cel], alpha = 0.5 )
 auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '10', color = 'k', more_text = 'v' )
 plt.xlim([0,1023])
 plt.ylim([1023,0])
+
+#%% Borde celular
+b = auxi.border(mascara, k = 11)
+b10 = auxi.border(mascara10, k = 11)
+
+plt.figure( figsize = [6,6], layout = 'compressed' )
+plt.subplot( 1, 2, 1 )
+plt.imshow(celula, cmap = 'gray')
+auxi.barra_de_escala( 10, sep = 1.3,  pixel_size = ps,  font_size = '10', color = 'w' )
+plt.plot( b[1], b[0], c = 'w', ls = 'dashed', lw = 0.75  )
+
+tb, tb10 = 610, 750
+plt.subplot( 1, 2, 2 )
+plt.quiver(x, y, X_s, -Y_s, scale = 300)
+plt.imshow( mascara, cmap = color_maps[cel], alpha = 0.3 )
+plt.imshow( mascara10, cmap = color_maps[cel], alpha = 0.3 )
+plt.imshow( mascara20, cmap = color_maps[cel], alpha = 0.3 )
+plt.plot( [b[1][tb],b10[1][tb10]] , [b[0][tb],b10[0][tb10]], c = 'k'  )
+plt.text( np.mean([b[1][tb-20],b10[1][tb10-20]]), np.mean([b[0][tb-20],b10[0][tb10-20]]), '10 µm', rotation = 52, c = 'k', fontsize = 7, ha = 'center', va = 'center' )
+
+auxi.barra_de_escala( 10, sep = 1.3,  pixel_size = ps,  font_size = '10', color = 'k' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+
 
 #%% Plot NMT
 
