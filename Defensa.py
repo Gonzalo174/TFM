@@ -34,7 +34,7 @@ cm0 = ListedColormap( [(1, 1, 1), (0.122, 0.467, 0.706) ] )
 cm1 = ListedColormap( [(1, 1, 1), (1.000, 0.498, 0.055) ] )
 cm2 = ListedColormap( [(1, 1, 1), (0.173, 0.627, 0.173) ] )
 cm3 = ListedColormap( [(1, 1, 1), (0.839, 0.152, 0.157) ] )
-color_maps = [cm3, cm2, cm0, cm1]
+color_maps = [cm0, cm3, cm2, cm1]
 
 #%% Parámetros de ploteo
 
