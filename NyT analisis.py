@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Dec 25 10:08:50 2023
+Created on Sat Feb 17 16:00:04 2024
 
 @author: gonza
 """
@@ -15,6 +15,7 @@ from scipy.optimize import curve_fit
 from scipy.stats import ttest_ind as tt
 from scipy.stats import ranksums as rt
 
+
 import TFM
 import auxi
 
@@ -28,12 +29,21 @@ cm_ar = ListedColormap( [(0.122, 0.467, 0.706), (1, 1, 1), (0.839, 0.152, 0.157)
 cm_aa = ListedColormap( [(0.122, 0.467, 0.706), (1, 1, 1), (1.000, 0.498, 0.055)] ) 
 cm_aa2 = ListedColormap( [(0.122, 0.467, 0.706), (0, 0, 0), (1.000, 0.498, 0.055)] ) 
 
-c0 = (0.122, 0.467, 0.706)
-c1 = (1.000, 0.498, 0.055)
-c2 = (0.173, 0.627, 0.173)
-c3 = (0.839, 0.152, 0.157)
-# colores = [c2, c3, c0, c1]
-colores = [c0, c3, c2, c1]
+c0 = (0.839, 0.152, 0.157)
+c1 = (0.580, 0.000, 0.827)
+c2 = (0.122, 0.467, 0.706)
+c3 = (0.173, 0.627, 0.173)
+c4 = (1.000, 0.498, 0.055)
+
+colores = [c0, c1, c2, c3, c4]
+
+cm0 = ListedColormap( [(1, 1, 1), c0 ] )
+cm1 = ListedColormap( [(1, 1, 1), c1 ] )
+cm2 = ListedColormap( [(1, 1, 1), c2 ] )
+cm3 = ListedColormap( [(1, 1, 1), c3 ] )
+cm4 = ListedColormap( [(1, 1, 1), c4 ] )
+
+color_maps = [cm0, cm1, cm2, cm3, cm4]
 
 #%% Parámetros de ploteo
 
@@ -43,126 +53,147 @@ plt.rcParams['font.family'] = "Times New Roman"
 
 #%% Células
 
-cs10 = [ 1, 4, 5, 6, 7, 8, 9, 11, 12, 13, 20, 22, 25 ] 
-ss10 = [ 14, 15, 17, 18, 26, 27, 28, 29]
+cs10 = [1, 4, 5, 6, 7, 8, 9, 11, 12, 13, 20, 22, 25 ] 
+ss10 = [14, 15, 17, 18, 26, 27, 28, 29]
 cs7 =  [ (11,3), (11,4),  (10,1), (10,2), (10,5), (9,1), (1,1) ]
 ss7 =  [ (8,2), (8,3), (7,1), (7,2), (6,2), (6,3), (6,4), (5,4), (4,1), (3,3) ]
 conjuntos = [cs10, ss10, cs7, ss7]
 
+#%%
+# 10 CS: 18, 6, 5   SS: 29, 27, 17, 14
+data0 = auxi.celula( 6, 'MCF10', place = 'home', trans = True ) # 10 CS
+data1 = auxi.celula( 29, 'MCF10', place = 'home', trans = True  ) # 10 SS
 
-muestra = [ 9, 25, (11,4), (10,5) ]
-linea_muestra = [ 'MCF10', 'MCF10', 'MCF7', 'MCF7' ]
+data2 = auxi.celula( (11,4), 'MCF7', place = 'home', trans = True  ) # 7 CS
+data3 = auxi.celula( (7,2), 'MCF7', place = 'home', trans = True  ) # 7 SS
 
-# valores de A?
-# valores de exploración?
+data_cels = [ data0, data1, data2, data3 ]
 
 #%%
+celulas = [ data_cels[i][2] - auxi.median_blur(data_cels[i][2], 50)  for  i in range(4)  ]
+# celulas = [ data_cels[i][2]  for  i in range(4)  ]
+#%%
 
-cel = []
-suero_ = []
-linea_ = []
+data_plot = []
 
-defo = [] # m
-fuer = [] # kPa
-cant = []
-area = []
-
-
-for index in range(4):
-    lista = conjuntos[index]
-    if index == 0 or index == 2:
-        suero = 'CS'
-    if index == 1 or index == 3:
-        suero = 'SS'    
+for i in range(4):
+    pre, post, trans, mascara, mascara10, mascara20, ps = data_cels[i]
+    # plt.imshow(mascara, cmap = color_maps[i])
+    # plt.show()
     
-    if index == 0 or index == 1:
-        linea = 'MCF10'
-    if index == 2 or index == 3:
-        linea = 'MCF7'    
-        
-    for N in lista:
-        pre, post, mascara, mascara10, mascara20, ps = auxi.celula( N, linea )
+    ws, exp = 2.5, 0.7
+   
+    A1 = auxi.busca_A( pre, 0.75, ps, win = 2.5, A0 = 0.85 )
+    dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Smooth3", A = A1)
+    x, y = dominio
+    Y_0, X_0 = deformacion 
+    Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
+    X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
 
-        ws, exp = 2.5, int(0.7/ps)
-        A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
-        if N == 22 or N == 25:
-            exp = int(1/ps)
-        
-        dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = exp, mode = "Smooth3", A = A1)
-        Y_0, X_0 = deformacion 
-        x, y = dominio
-        Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
-        X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
-        R_s = np.sqrt( X_s**2 + Y_s**2 )*ps*1e-6 # m
+    E, nu = 31.6, 0.5   
+    # uy, ux = Y_s, X_s
+    uy, ux = Y_nmt, X_nmt
+    x_plot, y_plot = x, y
 
-        plt.figure(figsize = [6,4] )
-        plt.imshow( mascara, cmap = 'Reds', alpha = 0.5 )
-        plt.imshow( mascara10, cmap = 'Reds', alpha = 0.5 )
+    if i == 0:
+        uy, ux = Y_s*0.8, X_s*0.8
 
-        # plt.quiver(x,y,X_0,-Y_0, res, cmap = cm_crimson, scale = 100, pivot='tail')
-        # plt.quiver(x,y,X_nmt,-Y_nmt, scale = 100, pivot='tail')
-        plt.quiver(x,y,X_s,-Y_s, scale = 100, pivot='tail')
+    if i == 1:
+        uy, ux = Y_s*1.2, X_s*1.2
 
-        # auxi.barra_de_escala( 10, sep = 1.5, pixel_size = ps, font_size = 11, color = 'k', more_text = linea, a_lot_of_text = suero )
-        auxi.barra_de_escala( 10, sep = 1.5, pixel_size = ps, font_size = 11, color = 'k', more_text = linea, a_lot_of_text = str(N) )
 
-        plt.xlim([0,1023])
-        plt.ylim([1023,0])
-        plt.show()
-        
-        
-        E, nu = 31.6, 0.5      # kPa
-        uX, uY = X_s, Y_s
-        x_plot, y_plot = x, y
+    lam = auxi.busca_lambda( uy, ux, ps, solo_lambda = True )    
+    ty, tx = TFM.traction(uy, ux, ps*1e-6, ws*1e-6, E*1e3, nu, lam )
 
-        # lam = 0
-        lam = auxi.busca_lambda( uY, uX, ps*1e-6, solo_lambda = True )
+    celula = celulas[i]
 
-        ty, tx, vy0, vx0 = TFM.traction(uY, uX, ps*1e-6, ws*1e-6, E*1e3, nu, lam, Lcurve = True)
-        # ty, tx = TFM.smooth(ty,3), TFM.smooth(tx,3)
-        tr = np.sqrt( np.real(ty)**2 + np.real(tx)**2 )
+    data_i = celula, mascara, mascara10, mascara20, uy, ux, ty, tx, y_plot, x_plot, ps
 
-        plt.figure(figsize = [6,4] )
-        plt.quiver(x_plot, y_plot, tx, -ty, scale = 20000)
-        plt.imshow( mascara, cmap = 'Reds', alpha = 0.5 )
-        auxi.barra_de_escala( 10, sep = 1.5, pixel_size = ps, font_size = '11', color = 'k', more_text = 'T' )
-        plt.xlim([0,1023])
-        plt.ylim([1023,0])        
-        plt.show()
-        
-        cel.append(N)
-        suero_.append(suero)
-        linea_.append(linea)
+    data_plot.append(data_i)
 
-        defo.append( np.sum( R_s*auxi.reshape_mask(mascara10, x, y) )  )
-        fuer.append( np.sum( tr*auxi.reshape_mask(mascara10, x, y) )  )
-        cant.append( np.sum( auxi.reshape_mask(mascara10, x, y) ) )
-        area.append( np.sum( mascara)*(ps*1e-6)**2 )
-        
+#%%
+
+plt.figure( figsize = [7,7], layout = 'compressed' )
+
+# orden = [1,4,7,10,2,5,8,11,3,6,9,12]
+orden = [1,2,3,4,5,6,7,8,9,10,11,12]
+tipo = ['MCF10A Con Suero','MCF10A Sin Suero','MCF7 Con Suero','MCF7 Sin Suero']
+
+
+for i in range(4):    
+     
+    celula, mascara, mascara10, mascara20, uy, ux, ty, tx, y_plot, x_plot, ps = data_plot[i]
+    M = auxi.smooth( auxi.reshape_mask(mascara20, x_plot, y_plot), 10 )
+
+
+    # Celula
+    bor = auxi.border(mascara, k = 7)
+    plt.subplot(4,3, orden[3*i] )
+    plt.imshow( celula, cmap = 'gray' )
+    auxi.barra_de_escala( 20, sep = 1.5,  pixel_size = ps, font_size = '10', color = 'w', more_text = tipo[i] )
+    plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 0.7 )
+    plt.xlim([0,1023])
+    plt.ylim([1023,0])
+
+    # Deformacion
+    plt.subplot(4,3, orden[3*i+1] )
+    plt.quiver(x_plot, y_plot, ux*ps*1e-6*M, -uy*ps*1e-6*M, scale = 0.00001)
+    plt.imshow( mascara, cmap = color_maps[i], alpha = 0.3 )
+    plt.imshow( mascara10, cmap = color_maps[i], alpha = 0.3 )
+    auxi.barra_de_escala( 20, sep = 1.5,  pixel_size = ps,  font_size = '12', color = 'k', more_text = 'u', text = False  )
+    plt.xlim([0,1023])
+    plt.ylim([1023,0])
+
+    # Traccion
+    plt.subplot(4,3,orden[3*i+2] )
+    # plt.quiver(x_plot, y_plot, tx, -ty, scale = 20000)
+    plt.quiver(x_plot, y_plot, tx*M, -ty*M, scale = 20000)
+    plt.imshow( mascara, cmap = color_maps[i], alpha = 0.6 )
+    auxi.barra_de_escala( 20, sep = 1.5,  pixel_size = ps, font_size = '12', color = 'k', more_text = 't', text = False )
+    plt.xlim([0,1023])
+    plt.ylim([1023,0])
+
+
+#%%
+    # Comprobacion V
+    plt.subplot(2,2,2)
+    plt.quiver(x_plot, y_plot, vx0, -vy0, scale = 0.00001)
+    plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+    auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '12', color = 'k', more_text = 'V' )
+    plt.xlim([0,1023])
+    plt.ylim([1023,0])
+
+    # Entrada U
+    plt.subplot(2,2,3)
+    plt.quiver(x_plot, y_plot, ux*ps*1e-6, -uy*ps*1e-6, scale = 0.00001)
+    plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+    auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '12', color = 'k', more_text = 'U'  )
+    plt.xlim([0,1023])
+    plt.ylim([1023,0])
+
+    # Diferencia U - V
+    plt.subplot(2,2,4)
+    plt.quiver(x_plot, y_plot, duvx0, -duvy0, scale = 0.00001)
+    plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+    auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '12', color = 'k', more_text = 'U-V' )
+    plt.xlim([0,1023])
+    plt.ylim([1023,0])
+
+    plt.show()
+
+
+
+
 
 
 #%%
 
-data = pd.DataFrame()
-
-
-data["Celula"] = cel
-data["Area"] = area
-data["N"] = cant
-
-data["Deformación"] = defo
-data["Tracción"] = fuer
-data["Suero"] = suero_
-data["Linea"] = linea_
-
-
-data.to_csv( "data23.01.csv" )
 
 
 #%%
 
 # df = pd.read_csv( r"C:\Users\gonza\1\Tesis\TFM\data22.01.csv", index_col = 'Celula')
-df = pd.read_csv( r"C:\Users\gonza\1\Tesis\TFM\data22.01.csv", index_col = 'Celula')
+df = pd.read_csv( r"C:\Users\gonza\1\Tesis\TFM\data22.01_v2.txt", index_col = 'Celula')
 
 df['1/N'] = 1/df['N']
 df['1/Area'] = 1/df['Area']
@@ -217,7 +248,7 @@ plt.ylabel( "Fuerza [mN]" )
 plt.ylim([-0.05, 0.65])
 plt.xticks([0,1,2,3], ['MCF10A CS','MCF10A SS','MCF7 CS','MCF7 SS'] )
 
-plt.text( 0, -0.17, "(N = 13)", ha = 'center' )
+plt.text( 0, -0.17, "(N = 11)", ha = 'center' )
 plt.text( 1, -0.17, "(N = 8)", ha = 'center' )
 plt.text( 2, -0.17, "(N = 7)", ha = 'center' )
 plt.text( 3, -0.17, "(N = 10)", ha = 'center' )
@@ -226,134 +257,10 @@ plt.show()
 
 #%%
 
-m, T = auxi.crea_tabla(valoresF, tt, label = "ttest fuerza")
+m, T = auxi.crea_tabla(valoresF, rt, label = "ttest fuerza")
+
 print(m)
-
-
-#%%
-
-plt.figure(figsize = [10,6.25], layout = "compressed")
-
-plt.subplot( 2,2,1 )
-plt.plot( D_plot, T_plot, c = 'k', ls = 'dashed', lw = 0.9 )
-plt.plot( valoresD[0], valoresT[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
-plt.plot( valoresD[1], valoresT[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
-plt.plot( valoresD[2], valoresT[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75)
-plt.plot( valoresD[3], valoresT[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75)
-plt.legend()
-plt.grid()
-plt.ylabel("Tracción promedio [Pa]")
-# plt.xlabel("Deformación promedio [µm]")
-plt.xlim([-0.03, 0.73])
-plt.ylim([-10,1010])
-plt.xticks([0,0.1,0.2,0.3,0.4,0.5,0.6,0.7],['']*8)
-plt.text( 0.68, 30, '(a)', fontsize = 15)
-
-plt.subplot( 2,2,3 )
-plt.plot( valoresD[0], valoresF[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
-plt.plot( valoresD[1], valoresF[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
-plt.plot( valoresD[2], valoresF[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75)
-plt.plot( valoresD[3], valoresF[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
-# plt.legend()
-plt.grid()
-plt.ylabel("Fuerza [mN]")
-plt.xlabel("Deformación promedio [µm]")
-plt.xlim([-0.03, 0.73])
-plt.ylim([-0.1,2.9])
-plt.text( 0.68, 0.03, '(c)', fontsize = 15)
-
-# plt.xlim([-0.02,0.272])
-# plt.ylim([-0.2,1.2])
-
-
-plt.subplot( 2,2,4 )
-plt.plot( valoresA[0], valoresF[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
-plt.plot( valoresA[1], valoresF[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
-plt.plot( valoresA[2], valoresF[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75 )
-plt.plot( valoresA[3], valoresF[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
-# plt.legend()
-plt.grid()
-# plt.ylabel("Fuerza [mN]")
-plt.xlabel("Area [µm²]")
-plt.xlim([-10, 3310])
-plt.ylim([-0.1,2.9])
-plt.yticks([0,0.5,1,1.5,2,2.5], ['']*6)
-plt.text( 3070, 0.03, '(d)', fontsize = 15)
-
-
-plt.subplot( 2,2,2 )
-plt.plot( valoresA[0], valoresT[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
-plt.plot( valoresA[1], valoresT[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
-plt.plot( valoresA[2], valoresT[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75 )
-plt.plot( valoresA[3], valoresT[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
-# plt.legend()
-plt.grid()
-# plt.ylabel("Tracción promedio [Pa]")
-# plt.xlabel("Area [µm²]")
-plt.xlim([-10, 3310])
-plt.ylim([-10,1010])
-plt.xticks([0,500,1000,1500,2000,2500,3000], ['']*7)
-plt.yticks([0,200,400,600,800,1000], ['']*6)
-plt.text( 3070, 30, '(b)', fontsize = 15)
-
-plt.show()
-
-#%%
-
-plt.figure(figsize = [6.44,4])
-plt.plot( D_plot, T_plot, c = 'k', ls = 'dashed', lw = 0.9 )
-plt.plot( valoresD[0], valoresT[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
-plt.plot( valoresD[1], valoresT[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
-plt.plot( valoresD[2], valoresT[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75)
-plt.plot( valoresD[3], valoresT[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75)
-
-plt.legend()
-plt.grid()
-plt.ylabel("Tracción promedio [Pa]")
-plt.xlabel("Deformación promedio [µm]")
-
-#%%
-
-plt.figure(figsize = [6.44,4])
-plt.plot( valoresD[0], valoresF[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
-plt.plot( valoresD[1], valoresF[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
-plt.plot( valoresD[2], valoresF[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75)
-plt.plot( valoresD[3], valoresF[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
-plt.legend()
-plt.grid()
-plt.ylabel("Fuerza [mN]")
-plt.xlabel("Deformación promedio [µm]")
-
-# plt.xlim([-0.02,0.272])
-# plt.ylim([-0.2,1.2])
-
-#%%
-
-plt.figure(figsize = [6.44,4])
-plt.plot( valoresA[0], valoresF[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
-plt.plot( valoresA[1], valoresF[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
-plt.plot( valoresA[2], valoresF[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75 )
-plt.plot( valoresA[3], valoresF[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
-plt.legend()
-plt.grid()
-plt.ylabel("Fuerza [mN]")
-plt.xlabel("Area [µm²]")
-
-#%%
-
-plt.figure(figsize = [6.44,4])
-plt.plot( valoresA[0], valoresT[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
-plt.plot( valoresA[1], valoresT[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
-plt.plot( valoresA[2], valoresT[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75 )
-plt.plot( valoresA[3], valoresT[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
-plt.legend()
-plt.grid()
-plt.ylabel("Tracción promedio [Pa]")
-plt.xlabel("Area [µm²]")
-
-
-
-
+# print(T)
 #%%
 
 valoresD_todos = valoresD[0].tolist() + valoresD[1].tolist() + valoresD[2].tolist() + valoresD[3].tolist()
@@ -378,6 +285,168 @@ plt.plot( D_plot, T_plot, c = 'k', ls = 'dashed' )
 
 # m = (1440+30)Pa/µm
 # b = (20+6)Pa
+
+
+
+#%%
+
+plt.figure(figsize = [10,6.25], layout = "compressed")
+
+plt.subplot( 2,2,1 )
+plt.plot( D_plot, T_plot, c = 'k', ls = 'dashed', lw = 0.9 )
+plt.plot( valoresD[0], valoresT[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
+plt.plot( valoresD[1], valoresT[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
+plt.plot( valoresD[2], valoresT[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75)
+plt.plot( valoresD[3], valoresT[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75)
+plt.legend()
+plt.grid()
+plt.ylabel("Tracción promedio [Pa]")
+# plt.xlabel("Deformación promedio [µm]")
+plt.xlim([-0.03, 0.28])
+plt.ylim([-10,410])
+plt.xticks([0,0.05,0.1,0.15,0.2,0.25],['']*6)
+plt.yticks([0,100,200,300,400], [0,100,200,300,400])
+plt.text( 0.257, 15, '(a)', fontsize = 15)
+
+
+plt.subplot( 2,2,2 )
+plt.plot( valoresA[0], valoresT[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
+plt.plot( valoresA[1], valoresT[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
+plt.plot( valoresA[2], valoresT[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75 )
+plt.plot( valoresA[3], valoresT[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
+# plt.legend()
+plt.grid()
+# plt.ylabel("Tracción promedio [Pa]")
+# plt.xlabel("Area [µm²]")
+plt.xlim([-10, 3010])
+plt.ylim([-10,410])
+plt.xticks([0,500,1000,1500,2000,2500,3000], ['']*7)
+plt.yticks([0,100,200,300,400], ['']*5)
+plt.text( 2770, 15, '(b)', fontsize = 15)
+
+
+plt.subplot( 2,2,3 )
+plt.plot( valoresD[0], valoresF[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
+plt.plot( valoresD[1], valoresF[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
+plt.plot( valoresD[2], valoresF[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75)
+plt.plot( valoresD[3], valoresF[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
+# plt.legend()
+plt.grid()
+plt.ylabel("Fuerza [mN]")
+plt.xlabel("Deformación promedio [µm]")
+plt.xlim([-0.03, 0.28])
+plt.ylim([-0.05,0.65])
+plt.xticks([0,0.05,0.1,0.15,0.2,0.25],[0,0.05,0.1,0.15,0.2,0.25])
+plt.yticks([0,0.2,0.4,0.6], [0,0.2,0.4,0.6])
+plt.text( 0.257, 0, '(c)', fontsize = 15)
+
+
+# plt.xlim([-0.02,0.272])
+# plt.ylim([-0.2,1.2])
+
+
+plt.subplot( 2,2,4 )
+plt.plot( valoresA[0], valoresF[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
+plt.plot( valoresA[1], valoresF[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
+plt.plot( valoresA[2], valoresF[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75 )
+plt.plot( valoresA[3], valoresF[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
+# plt.legend()
+plt.grid()
+# plt.ylabel("Fuerza [mN]")
+plt.xlabel("Area [µm²]")
+plt.xlim([-10, 3010])
+plt.ylim([-0.05,0.65])
+plt.xticks([0,500,1000,1500,2000,2500,3000],[0,500,1000,1500,2000,2500,3000])
+plt.yticks([0,0.2,0.4,0.6], ['']*4)
+plt.text( 2770, 0, '(d)', fontsize = 15)
+
+
+
+plt.show()
+
+
+
+
+
+
+
+
+#%%
+
+plt.figure(figsize = [6.44,4])
+plt.plot( D_plot, T_plot, c = 'k', ls = 'dashed', lw = 0.9 )
+plt.plot( valoresD[0], valoresT[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
+plt.plot( valoresD[1], valoresT[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
+plt.plot( valoresD[2], valoresT[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75)
+plt.plot( valoresD[3], valoresT[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75)
+
+plt.legend()
+plt.grid()
+plt.ylabel("Tracción promedio [Pa]")
+plt.xlabel("Deformación promedio [µm]")
+
+#%%
+
+plt.figure(figsize = [6.44,4])
+plt.plot( valoresD[0], valoresF[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
+plt.plot( valoresD[1], valoresF[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
+plt.plot( valoresD[2], valoresF[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75)
+plt.plot( valoresD[3], valoresF[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
+plt.legend()
+plt.grid()
+plt.ylabel("Fuerza [mN]")
+plt.xlabel("Deformación promedio [µm]")
+
+# plt.xlim([-0.02,0.272])
+# plt.ylim([-0.2,1.2])
+
+#%%
+
+plt.figure(figsize = [6.44,4])
+plt.plot( valoresA[0], valoresF[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
+plt.plot( valoresA[1], valoresF[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
+plt.plot( valoresA[2], valoresF[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75 )
+plt.plot( valoresA[3], valoresF[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
+plt.legend()
+plt.grid()
+plt.ylabel("Fuerza [mN]")
+plt.xlabel("Area [µm²]")
+
+#%%
+
+plt.figure(figsize = [6.44,4])
+plt.plot( valoresA[0], valoresT[0], 'o', color = colores[0], label = 'MCF10A CS', alpha = 0.75)
+plt.plot( valoresA[1], valoresT[1], 'o', color = colores[1], label = 'MCF10A SS', alpha = 0.75)
+plt.plot( valoresA[2], valoresT[2], 'o', color = colores[2], label = 'MCF7 CS', alpha = 0.75 )
+plt.plot( valoresA[3], valoresT[3], 'o', color = colores[3], label = 'MCF7 SS', alpha = 0.75 )
+plt.legend()
+plt.grid()
+plt.ylabel("Tracción promedio [Pa]")
+plt.xlabel("Area [µm²]")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

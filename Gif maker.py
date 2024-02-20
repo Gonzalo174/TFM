@@ -105,12 +105,22 @@ for i in range(-3, zf - z0, 1):
     # plt.title( "w = "  + str(int(vi/4)) + " px, Deformación promedio = " + str( np.round(r_mean,3)) + ' µm'  )
     # plt.quiver(x, y, X_0, -Y_0, res, cmap = cm_crimson, scale = 100)
     # plt.quiver(x, y, X_nmt, -Y_nmt, scale = 100)
-    plt.quiver(x, y, X_s, -Y_s, scale = 100)
-    plt.imshow( mascara, cmap = color_maps[cel], alpha = 0.5 )
-    auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '11', color = 'k', more_text = str((i+3)/2) + ' µm' )
-    plt.xlim([0,1023])
-    plt.ylim([1023,0])
+    
+    
+    plt.imshow( np.sqrt(X_s**2+Y_s**2), vmin = 0, vmax = 7, extent=[0,1024,1024,0])    
+    plt.plot( b[1], np.array(b[0]), c = 'w', ls = 'dashed', lw = 0.75  )
+    plt.xticks([])
+    plt.yticks([])
+    # # auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '11', color = 'w', more_text = str((i+3)/2) + ' µm' )
+
+    # plt.quiver(x, y, X_s, -Y_s, scale = 100)
+    # plt.imshow( mascara, cmap = color_maps[cel], alpha = 0.5 )
+    # auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '11', color = 'k', more_text = str((i+3)/2) + ' µm' )
+    # plt.xlim([0,1023])
+    # plt.ylim([1023,0])
     name =  r"C:\Users\gonza\1\Tesis\Tesis\Defensa\Gif" + '\img_' + str(i) + ".png" 
+    
+    
     plt.savefig(  name  )
     image_filenames.append( name )
 
@@ -130,6 +140,18 @@ for filename in image_filenames:
 # Save the images as an animated GIF
 output_filename = r"C:\Users\gonza\1\Tesis\Tesis\Defensa\Gif" + '\profundidad4.gif'  # Specify the output filename
 images[0].save(output_filename, save_all=True, append_images=images[1:], duration=500, loop=0)
+
+#%%
+
+
+plt.figure( figsize = [7,7], layout = "compressed" )
+
+plt.plot( images[0] )
+
+
+
+
+
 
 
 

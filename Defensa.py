@@ -246,7 +246,7 @@ plt.ylim([1023,0])
 
 
 
-#%% NMT polar
+#%%
 
 cel = 0
 pre, post, celula, mascara, mascara10, mascara20, ps = auxi.celula( muestra[cel], linea_muestra[cel], place = 'home', trans = True, D_pp = 0 )
@@ -276,7 +276,7 @@ plt.plot( b[1], b[0], c = 'w', ls = 'dashed', lw = 0.75  )
 auxi.barra_de_escala( 20, sep = 1.5,  pixel_size = ps,  font_size = '10', color = 'w' )
 
 
-
+#%%
 
 
 

@@ -600,7 +600,8 @@ def traction( Y, X, ps, ws = 2.5*1e-6, E = 31.6*1e3, nu = 0.5, lam = -1, Lcurve 
                 Tu = np.array(  [ FuX[j,i]   ,  FuY[j,i] ] )
                 Id = np.array( [[1,0],[0,1]] )
                 # TK_inv = np.linalg.inv(TK)
-                M = np.dot( np.linalg.inv( ( np.dot( TK, TK ) + lam*Id ) ) , TK )
+                M = np.dot( np.linalg.inv( ( np.dot( TK, TK ) + lam**2*Id ) ) , TK )
+                # M = np.dot( np.linalg.inv( ( np.dot( TK, TK ) + lam*Id ) ) , TK )
                 Tt = np.dot( M, Tu )
     
                 Ttx[j,i], Tty[j,i] = np.real(Tt[0]), np.real(Tt[1])

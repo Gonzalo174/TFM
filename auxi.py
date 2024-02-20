@@ -19,10 +19,10 @@ def barra_de_escala( scale_length, pixel_size = 0.1007, scale_unit = 'µm', loc 
     for i in np.arange(0, -sep/pixel_size, -0.1):
         plt.plot([ img_len - sep/pixel_size - scale_pixels, img_len - sep/pixel_size ], [img_len - sep/pixel_size + i, img_len - sep/pixel_size + i], color=color, linewidth = 2)
     if text:
-        plt.text(img_len - sep/pixel_size - scale_pixels/2, img_len - 3*sep/pixel_size , f'{scale_length} {scale_unit}', color=color, weight='bold', ha='center', va = 'bottom')#, fontsize = font_size )
+        plt.text(img_len - sep/pixel_size - scale_pixels/2, img_len - 3*sep/pixel_size , f'{scale_length} {scale_unit}', color=color, weight='bold', ha='center', va = 'bottom', fontsize = font_size )
 
     if more_text != '':    
-        plt.text(img_len - sep/pixel_size/2, sep/pixel_size , more_text, color=color, weight='bold', ha='right', va = 'top', fontsize = font_size)#, fontstyle = 'italic' )
+        plt.text(img_len - sep/pixel_size/2, sep/pixel_size + 10 , more_text, color=color, weight='bold', ha='right', va = 'top', fontsize = font_size)#, fontstyle = 'italic' )
     if a_lot_of_text != '':
         plt.text(sep/pixel_size, img_len - sep/pixel_size/2 , a_lot_of_text, color=color, weight='bold', ha='left', va = 'bottom', fontsize = font_size )
 
@@ -319,6 +319,48 @@ def anti_interpolate( array_ ):
 def R(X, Y):
     return np.sqrt( np.real(X)**2 + np.real(Y)**2 )
 
+
+def adentro_y_afuera( R, mascara, mascara10  ):
+    franja = mascara10-mascara
+    
+    adentro =  np.sum( mascara*R )/np.sum(mascara)
+    afuera = np.sum( franja*R )/np.sum(franja)
+
+    D_adentro =  np.sqrt( np.sum( mascara*(R - adentro)**2 ))/np.sum(mascara) 
+    D_afuera = np.sqrt( np.sum( franja*(R - afuera)**2 ))/np.sum(franja) 
+
+    return np.round(adentro,-1), np.round(D_adentro,-1), np.round(afuera,-1), np.round(D_afuera,-1)
+    
+
+def proyecctar_angulo( Y, X, y, x, mascara, th = 0.5 ):
+    Ycm, Xcm = center_of_mass( mascara )
+    m = reshape_mask(mascara, x, y)
+    Vy, Vx = -(y - Ycm), -(x - Xcm)
+    
+    R_ = R(X,Y)
+    # RV = R(Vx,Vy)
+    m[ smooth(R_,3) < np.sum( R_*m )/np.sum(m)*th ] = 0
+    
+    # v1x, v1y = X/(R+0.0000001), Y/(R+0.0000001) 
+    # v2x, v2y = Vx/RV, Vy/RV 
+    # dot  = v1x*v2x + v1y*v2y
+    # theta = np.arccos( dot )*180/np.pi
+    
+    a1 = np.arctan2(Y, X)
+    a2 = np.arctan2(Vy, Vx)
+    theta1 = (a1 - a2)*180/np.pi
+    theta2 = 360 - (a1 - a2)*180/np.pi
+    
+    corrector = np.zeros( theta1.shape )
+    corrector[ theta1 > 180 ] = 1
+    theta = theta1*(1-corrector) + theta2*corrector
+    
+    P_theta = np.sum( np.real(theta)*m )/np.sum( m )
+    D_theta = np.sqrt( np.sum( m*(theta - P_theta)**2 )/np.sum(m) )
+
+    return theta*m, P_theta, D_theta 
+
+
 def crea_tabla(conjuntos, test, label = ' ', d = 4):
     l = len(conjuntos)
     m = np.zeros([l]*2)
@@ -340,7 +382,7 @@ def crea_tabla(conjuntos, test, label = ' ', d = 4):
    
     return np.round(m,d), line1 + line2 + line3 + line4 + line5 + line6 + line7
 
-def celula( N, line, place = 'home', trans = False, D_pp = 0 ):
+def celula( N, line, place = 'home', trans = False, cel_post = False, D_pp = 0 ):
     if place == 'home':
         path = r"C:\Users\gonza\1\Tesis\2023\\"
     else:    
@@ -362,8 +404,8 @@ def celula( N, line, place = 'home', trans = False, D_pp = 0 ):
 
         stack_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[0]
         stack_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[-1]+".oif" )[0]
-        celula_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[1,2]
-        # celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[-1]+".oif" )[1, 2 + pre_post7[N][0] - pre_post7[N][1] ]
+        celula_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[1,0]
+        celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[-1]+".oif" )[1, 2 + pre_post7[N][0] - pre_post7[N][1] ]
         mascara = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF7\\" + name + "_m_00um.png")
         if mascara[1,1] == 1:
             mascara = 1 - mascara
@@ -419,7 +461,7 @@ def celula( N, line, place = 'home', trans = False, D_pp = 0 ):
         stack_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[0]
         stack_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[-1]+".oif" )[0]
         celula_pre = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'PRE' ]["Archivo"].values[0]+".oif" )[1,2]
-        # celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[0]+".oif" )[1,2+pre10[N-1]-post10[N-1]]
+        celula_post = of.imread( full_path1 + r"\\" + metadata_region.loc[ metadata_region["Tipo"] == 'POST' ]["Archivo"].values[0]+".oif" )[1,2+pre10[N-1]-post10[N-1]]
         mascara = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_00um.csv")
         mascara10 = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_10um.csv")
         mascara20 = np.loadtxt( path[:-6] + r"PIV\Mascaras MCF10\\" + name + "_m_20um.csv")
@@ -442,6 +484,8 @@ def celula( N, line, place = 'home', trans = False, D_pp = 0 ):
     
     if trans:
         ret = pre, post, celula_pre, mascara, mascara10, mascara20, pixel_size
+        if cel_post:
+            ret = pre, post, celula_pre, celula_post, mascara, mascara10, mascara20, pixel_size
 
     if not trans:
         ret = pre, post, mascara, mascara10, mascara20, pixel_size

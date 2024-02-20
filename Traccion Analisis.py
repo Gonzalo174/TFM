@@ -28,13 +28,17 @@ c0 = (0.122, 0.467, 0.706)
 c1 = (1.000, 0.498, 0.055)
 c2 = (0.173, 0.627, 0.173)
 c3 = (0.839, 0.152, 0.157)
-colores = [c2, c3, c0, c1]
+c4 = (0.580, 0.000, 0.827)
+
+colores = [c2, c3, c0, c1, c4]
 
 cm0 = ListedColormap( [(1, 1, 1), (0.122, 0.467, 0.706) ] )
 cm1 = ListedColormap( [(1, 1, 1), (1.000, 0.498, 0.055) ] )
 cm2 = ListedColormap( [(1, 1, 1), (0.173, 0.627, 0.173) ] )
 cm3 = ListedColormap( [(1, 1, 1), (0.839, 0.152, 0.157) ] )
-color_maps = [cm2, cm3, cm0, cm1]
+cm4 = ListedColormap( [(1, 1, 1), c4 ] )
+
+color_maps = [cm2, cm3, cm0, cm1, cm4]
 
 #%% Parámetros de ploteo
 
@@ -64,7 +68,10 @@ data0 = auxi.celula( muestra[0], linea_muestra[0], place = 'home' )
 data1 = auxi.celula( muestra[1], linea_muestra[1], place = 'home' )
 data2 = auxi.celula( muestra[2], linea_muestra[2], place = 'home' )
 data3 = auxi.celula( muestra[3], linea_muestra[3], place = 'home' )
-data_cels = [data0, data1, data2, data3]
+
+data4 = auxi.celula( 29, 'MCF10', place = 'home' )
+
+data_cels = [data0, data1, data2, data3, data4]
 
 #%% Visualizador
 
@@ -148,9 +155,9 @@ Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
 X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
 x_plot, y_plot = x, y
 
-# fondo = auxi.median_blur(transmision, 50)
-# celula = transmision - fondo
-# bor = auxi.border(mascara)
+fondo = auxi.median_blur(transmision, 50)
+celula = transmision - fondo
+bor = auxi.border(mascara)
 i = 2
 plt.figure( figsize = [8,8], layout = 'compressed' )
 
@@ -265,6 +272,102 @@ plt.ylim([1023,0])
 plt.show()
 
 
+#%% Simil regularización
+
+i = 2
+pre, post, mascara, mascara10, mascara20, ps = data_cels[i]
+ws, exp = 2.5, 0.7
+E, nu = 31.6, 0.5  # kPa, adim
+
+dominio0, deformacion0 = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Smooth3", A = 0)
+
+A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
+dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Smooth3", A = A1)
+x, y = dominio
+Y_0, X_0 = deformacion 
+Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
+X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
+x_plot, y_plot = x, y
+uY, uX = Y_s, X_s
+
+Y_1, X_1 = deformacion
+ty1, tx1 = TFM.traction(Y_1, X_1, ps*1e-6, ws*1e-6, E*1e3, nu, -1)
+
+Y_2, X_2 = Y_nmt, X_nmt
+ty2, tx2 = TFM.traction(Y_2, X_2, ps*1e-6, ws*1e-6, E*1e3, nu, -1)
+
+Y_3, X_3 = Y_s, X_s
+ty3, tx3 = TFM.traction(Y_3, X_3, ps*1e-6, ws*1e-6, E*1e3, nu, -1)
+
+
+#%%
+plt.figure( figsize = [9,9], layout = 'compressed' )
+
+# U1
+plt.subplot(2,3,1)
+plt.quiver(x_plot, y_plot, X_1*ps*1e-6, -Y_1*ps*1e-6, scale = 0.00001)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '10', color = 'k', more_text = 'u' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+plt.text(512, -20, "u Crudo", c = 'k',  ha='center', va = 'bottom', fontsize = 14 )
+
+# T1 
+plt.subplot(2,3,4)
+plt.quiver(x_plot, y_plot, tx1, -ty1, scale = 20000)
+# plt.quiver(x_plot, y_plot, tx1*auxi.reshape_mask(mascara20, x, y), -ty1*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, font_size = '10', color = 'k', more_text = 't' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+
+# U2
+plt.subplot(2,3,2)
+plt.quiver(x_plot, y_plot, X_2*ps*1e-6, -Y_2*ps*1e-6, scale = 0.00001)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '10', color = 'k', more_text = 'u' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+plt.text(512, -20, "u NMT", c = 'k',  ha='center', va = 'bottom', fontsize = 14 )
+
+# T2 
+plt.subplot(2,3,5)
+plt.quiver(x_plot, y_plot, tx2, -ty2, scale = 20000)
+# plt.quiver(x_plot, y_plot, tx2*auxi.reshape_mask(mascara20, x, y), -ty2*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, font_size = '10', color = 'k', more_text = 't' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+
+# U3
+plt.subplot(2,3,3)
+plt.quiver(x_plot, y_plot, X_3*ps*1e-6, -Y_3*ps*1e-6, scale = 0.00001)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps,  font_size = '10', color = 'k', more_text = 'u' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+plt.text(512, -20, "u Suave", c = 'k',  ha='center', va = 'bottom', fontsize = 14 )
+# plt.text(1150, -20, ".", c = 'w',  ha='center', va = 'bottom', fontsize = 14 )
+
+# T3 
+plt.subplot(2,3,6)
+plt.quiver(x_plot, y_plot, tx3, -ty3, scale = 20000)
+# plt.quiver(x_plot, y_plot, tx3*auxi.reshape_mask(mascara20, x, y), -ty3*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, font_size = '10', color = 'k', more_text = 't' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+
+
+
+
+
+
+
+
+
+
+
 #%% Regularización para distintos mapas de deformación
 
 i = 2
@@ -288,21 +391,21 @@ Y_3, X_3 = Y_s, X_s
 
 
 N = 100
-expos = [-21, -20, -19, -18]
+expos = [ -21, -20, -19, -18 ]
 
-NlL1, l_list1, tr_list1, duvr_list1 = auxi.busca_lambda(5e-22, 5e-18, N, Y_1, X_1, ps*1e-6, ws*1e-6, E*1e3, nu, norma = True)
+NlL1, l_list1, tr_list1, duvr_list1 = auxi.busca_lambda(Y_1, X_1, ps*1e-6, l2 = 5e-22, l1 = 5e-18)
 D1 = np.diff( tr_list1 )/np.diff( duvr_list1 )
 m11, m21 = np.mean( D1[:int(N/10)] ) , np.mean( D1[-int(N/10 + 1):] )
 b11, b21 = np.mean( tr_list1[:int(N/10)] - m11*duvr_list1[:int(N/10)] ) , np.mean( tr_list1[-int(N/10 + 1):] - m21*duvr_list1[-int(N/10 + 1):] ) 
 N01 = [ np.argmin( np.abs(l_list1 - 10.0**expo ) ) for expo in expos ] 
 
-NlL2, l_list2, tr_list2, duvr_list2 = auxi.busca_lambda(5e-22, 5e-18, N, Y_2, X_2, ps*1e-6, ws*1e-6, E*1e3, nu, norma = True)
+NlL2, l_list2, tr_list2, duvr_list2 = auxi.busca_lambda(Y_2, X_2, ps*1e-6, l2 = 5e-22, l1 = 5e-18)
 D2 = np.diff( tr_list2 )/np.diff( duvr_list2 )
 m12, m22 = np.mean( D2[:int(N/10)] ) , np.mean( D2[-int(N/10 + 1):] )
 b12, b22 = np.mean( tr_list2[:int(N/10)] - m12*duvr_list2[:int(N/10)] ) , np.mean( tr_list2[-int(N/10 + 1):] - m22*duvr_list2[-int(N/10 + 1):] ) 
 N02 = [ np.argmin( np.abs(l_list2 - 10.0**expo ) ) for expo in expos ] 
 
-NlL3, l_list3, tr_list3, duvr_list3 = auxi.busca_lambda(5e-22, 5e-18, N, Y_3, X_3, ps*1e-6, ws*1e-6, E*1e3, nu, norma = True)
+NlL3, l_list3, tr_list3, duvr_list3 = auxi.busca_lambda(Y_3, X_3, ps*1e-6, l2 = 5e-22, l1 = 5e-18)
 D3 = np.diff( tr_list3 )/np.diff( duvr_list3 )
 m13, m23 = np.mean( D3[:int(N/10)] ) , np.mean( D3[-int(N/10 + 1):] )
 b13, b23 = np.mean( tr_list3[:int(N/10)] - m13*duvr_list3[:int(N/10)] ) , np.mean( tr_list3[-int(N/10 + 1):] - m23*duvr_list3[-int(N/10 + 1):] ) 
@@ -318,6 +421,8 @@ duvy2, duvx2 = Y_2*ps*1e-6 - vy2, X_2*ps*1e-6 - vx2
 
 ty3, tx3, vy3, vx3 = TFM.traction(Y_3, X_3, ps*1e-6, ws*1e-6, E*1e3, nu, l_list3[NlL3], Lcurve = True)
 duvy3, duvx3 = Y_3*ps*1e-6 - vy3, X_3*ps*1e-6 - vx3
+
+
 
 #%% Vertical
 
@@ -773,6 +878,32 @@ plt.ylim([1023,0])
 
 plt.show()
 
+
+#%%
+plt.figure(figsize = [9,3])
+duvr_plot2 = np.linspace( np.min(duvr_list2), np.max(duvr_list2), int(N*10) )
+plt.plot( duvr_plot2, m12*duvr_plot2 + b12, c = 'k', ls = 'dashed' )
+plt.plot( duvr_plot2, m22*duvr_plot2 + b22, c = 'k', ls = 'dashed' )
+plt.plot( duvr_list2, tr_list2, c = colores[i], ms = 4  )
+plt.plot( duvr_list2[N02], tr_list2[N02], '.', c = 'k', ms = 6  )
+plt.plot( [duvr_list2[NlL2]], [tr_list2[NlL2]], '.', c = 'k', ms = 6  )
+plt.xlabel('||u-v||')
+plt.ylabel('||t||')
+plt.xticks([0.0,0.2,0.4,0.6,0.8,1.0],['','','','','',''])
+plt.yticks([0.0,0.2,0.4,0.6,0.8,1.0],['','','','','',''])
+plt.grid()
+plt.ylim( [np.min(tr_list2)-0.1*np.max(tr_list2), 1.1*np.max(tr_list2)] )
+
+for j in range(4):
+    plt.text( duvr_list2[N02[j]]+0.01, tr_list2[N02[j]]+0.01, "10" , ha='left', va = 'bottom', fontsize = 11 )
+    plt.text( duvr_list2[N02[j]]+0.036, tr_list2[N02[j]]+0.06, str(expos[j]) , ha='left', va = 'bottom', fontsize = 7 )
+
+expoL2 = int( np.log10(l_list2[NlL2]) - 1 )
+valL2 = np.round(l_list2[NlL2]/10**expoL2,1)
+plt.text( duvr_list2[NlL2]+0.01, tr_list2[NlL2]+0.01, "λ = " + str(valL2) + " 10" , ha='left', va = 'bottom', fontsize = 11 )
+plt.text( duvr_list2[NlL2]+0.112, tr_list2[NlL2]+0.06, str(expoL2) , ha='left', va = 'bottom', fontsize = 7 )
+
+
 #%%
 
 duvr_i = auxi.R(duvx_i, duvy_i)
@@ -1030,3 +1161,800 @@ expoL2 = int( np.log10(l_list2[NlL2]) - 1 )
 valL2 = np.round(l_list2[NlL2]/10**expoL2,1)
 plt.text( duvr_list2[NlL2]+0.01, tr_list2[NlL2]+0.01, "λ = " + str(valL2) + " 10" , ha='left', va = 'bottom', fontsize = 11 )
 plt.text( duvr_list2[NlL2]+0.3, tr_list2[NlL2]+0.035, str(expoL2) , ha='left', va = 'bottom', fontsize = 7 )
+
+
+
+
+
+
+
+
+#%% Comparacion
+
+i = 2
+pre, post, mascara, mascara10, mascara20, ps = data_cels[i]
+ws, exp = 2.5, 1#0.7
+E, nu = 31.6, 0.5  # kPa, adim
+
+dominio1, deformacion1 = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Smooth3", A = 0)
+Y_1, X_1 = deformacion1 
+
+A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
+dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Smooth3", A = A1)
+x, y = dominio
+Y_0, X_0 = deformacion 
+Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
+X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
+x_plot, y_plot = x, y
+
+Y_2, X_2 = Y_nmt, X_nmt
+Y_3, X_3 = Y_s, X_s
+
+N = 100
+expos = [ -21, -20, -19, -18 ]
+
+# RENORMALIZACION
+
+NlL2, l_list2, tr_list2, duvr_list2 = auxi.busca_lambda(Y_2, X_2, ps*1e-6, l2 = 5e-22, l1 = 5e-18)
+D2 = np.diff( tr_list2 )/np.diff( duvr_list2 )
+m12, m22 = np.mean( D2[:int(N/10)] ) , np.mean( D2[-int(N/10 + 1):] )
+b12, b22 = np.mean( tr_list2[:int(N/10)] - m12*duvr_list2[:int(N/10)] ) , np.mean( tr_list2[-int(N/10 + 1):] - m22*duvr_list2[-int(N/10 + 1):] ) 
+N02 = [ np.argmin( np.abs(l_list2 - 10.0**expo ) ) for expo in expos ] 
+
+NlL3, l_list3, tr_list3, duvr_list3 = auxi.busca_lambda(Y_3, X_3, ps*1e-6, l2 = 5e-22, l1 = 5e-18)
+D3 = np.diff( tr_list3 )/np.diff( duvr_list3 )
+m13, m23 = np.mean( D3[:int(N/10)] ) , np.mean( D3[-int(N/10 + 1):] )
+b13, b23 = np.mean( tr_list3[:int(N/10)] - m13*duvr_list3[:int(N/10)] ) , np.mean( tr_list3[-int(N/10 + 1):] - m23*duvr_list3[-int(N/10 + 1):] ) 
+N03 = [ np.argmin( np.abs(l_list3 - 10.0**expo ) ) for expo in expos ] 
+
+
+ty2, tx2, vy2, vx2 = TFM.traction(Y_2, X_2, ps*1e-6, ws*1e-6, E*1e3, nu, l_list2[NlL2], Lcurve = True)
+duvy2, duvx2 = Y_2*ps*1e-6 - vy2, X_2*ps*1e-6 - vx2
+
+ty3, tx3, vy3, vx3 = TFM.traction(Y_3, X_3, ps*1e-6, ws*1e-6, E*1e3, nu, l_list3[NlL3], Lcurve = True)
+duvy3, duvx3 = Y_3*ps*1e-6 - vy3, X_3*ps*1e-6 - vx3
+
+# INVERSION DIRECTA
+
+A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
+dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Smooth3", A = A1)
+x, y = dominio
+Y_0, X_0 = deformacion 
+Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
+X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
+x_plot, y_plot = x, y
+uY, uX = Y_s, X_s
+# uY, uX = Y_s*auxi.reshape_mask(mascara20, x, y), X_s*auxi.reshape_mask(mascara20, x, y)
+
+ty, tx, vy, vx = TFM.traction(uY, uX, ps*1e-6, ws*1e-6, E*1e3, nu, -1, Lcurve = True)
+ty_s, tx_s = TFM.smooth(ty,3), TFM.smooth(tx,3)
+vy_s, vx_s = TFM.deformation( np.real(ty_s), np.real(tx_s), ws*1e-6, E*1e3, nu )
+duvy, duvx = uY*ps*1e-6 - vy, uX*ps*1e-6 - vx
+duvy_s, duvx_s = uY*ps*1e-6 - vy_s, uX*ps*1e-6 - vx_s
+
+# INTERPOLACION
+
+A1 = auxi.busca_A( pre, 0.75, ps, win = ws, A0 = 0.85 )
+dominio, deformacion = TFM.n_iterations( post, pre, int( np.round(ws/ps)*4 ), 3, exploration = int(exp/ps), mode = "Smooth3", A = A1)
+x, y = dominio
+Y_0, X_0 = deformacion 
+Y_nmt, X_nmt, res = TFM.nmt(*deformacion, 0.2, 5)
+X_s, Y_s = TFM.smooth(  X_nmt, 3 ), TFM.smooth(  Y_nmt, 3 )
+x_plot, y_plot = x, y
+uY, uX = Y_s, X_s
+
+uY_i, uX_i = auxi.interpolate(Y_s), auxi.interpolate(X_s)
+ty_i0, tx_i0, vy_i0, vx_i0 = TFM.traction(uY_i, uX_i, ps*1e-6, ws*1e-6/2, E*1e3, nu, -1, Lcurve = True)
+ty_i, tx_i = auxi.anti_interpolate(ty_i0), auxi.anti_interpolate(tx_i0)
+vy_i, vx_i = TFM.deformation( ty_i, tx_i )
+duvy_i, duvx_i = uY*ps*1e-6 - vy_i, uX*ps*1e-6 - vx_i
+
+#  ds   dss   rnmt   rs    dsi
+#  t    t_s   t2     t3    t_i
+
+#%% Ploteo vectorial
+
+name = "Directa sobre Usuave interpolada"
+plt.quiver(x_plot, y_plot, tx, -ty, scale = 20000)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, font_size = '20', color = 'k', more_text = name )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+
+#%% Afuera y adentro
+
+Rd_s = auxi.R( tx, ty )
+Rd_ss = auxi.R( tx_s, ty_s )
+Rr_nmt = auxi.R( tx2, ty2 )
+Rr_s = auxi.R( tx3, ty3 )
+Rd_si = auxi.R( tx_i, ty_i )
+
+Rd_s_data = auxi.adentro_y_afuera(Rd_ss, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) )
+Rd_ss_data = auxi.adentro_y_afuera(Rd_ss, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) ) 
+Rr_nmt_data = auxi.adentro_y_afuera(Rr_nmt, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) )
+Rr_s_data = auxi.adentro_y_afuera(Rr_s, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) ) 
+Rd_si_data = auxi.adentro_y_afuera(Rd_si, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) )
+
+mapa_d_s, angulo_d_s, Dangulo_d_s = auxi.proyecctar_angulo(np.real(ty), np.real(tx), y, x, mascara, th = 1/2)
+mapa_d_ss, angulo_d_ss, Dangulo_d_ss = auxi.proyecctar_angulo(np.real(ty_s), np.real(tx_s), y, x, mascara, th = 1/2)
+mapa_r_nmt, angulo_r_nmt, Dangulo_r_nmt = auxi.proyecctar_angulo(np.real(ty2), np.real(tx2), y, x, mascara, th = 1/2)
+mapa_r_s, angulo_r_s, Dangulo_r_s = auxi.proyecctar_angulo(np.real(ty3), np.real(tx3), y, x, mascara, th = 1/2)
+mapa_d_si, angulo_d_si, Dangulo_d_si = auxi.proyecctar_angulo(np.real(ty_i), np.real(tx_i), y, x, mascara, th = 1/2)
+
+bor = auxi.border(mascara, k=7)
+
+'''        Modulo        angulo
+       mascara  franja   mascara
+ds:    670 50   260 20    3 33
+dss:   600 40   240 20    4 21
+rnmt:  620 40   230 20   -4 56
+rs:    570 40   220 10    4 22
+dsi:   780 60   290 20    8 40
+'''
+#%% Con vector
+
+D_zoom = 18 # um
+L_ventana = int( np.round(ws/ps) )*ps
+mapa_A = mapa_d_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+L_mapa = L_ventana*len(mapa_A)
+D_mascara = int((L_mapa/ps - 1024)/2)
+a, b = 0 - D_mascara, 1024 + D_mascara 
+Ycm, Xcm = auxi.center_of_mass( mascara )
+
+plt.figure(figsize=[10,10], layout = "compressed")
+
+
+mapa_A = mapa_d_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+
+titulo = "u Suave"
+plt.subplot(3,5,1)
+plt.quiver(x_plot, y_plot, tx, -ty, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k')
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+
+
+plt.subplot(3,5,1+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+plt.text( 80, 512, '||Tracción|| [kPa]', rotation = 90, ha = 'center', va = 'center', fontsize = 12 )
+
+
+plt.subplot(3,5,1+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+plt.text( 80, 512, 'Ángulo [grados]', rotation = 90, ha = 'center', va = 'center', fontsize = 12 )
+
+
+mapa_A = mapa_d_ss[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_ss[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = "u Suave + t Suave"
+plt.subplot(3,5,2)
+plt.quiver(x_plot, y_plot, tx_s, -ty_s, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k', text = False )
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+plt.text( 512, -80, 'Inversión  directa', ha = 'center', fontsize = 17 )
+
+
+plt.subplot(3,5,2+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+plt.subplot(3,5,2+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+
+mapa_A = mapa_d_si[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_si[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = "u Interpolado"
+plt.subplot(3,5,3)
+plt.quiver(x_plot, y_plot, tx_i, -ty_i, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k', text = False )
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+
+plt.subplot(3,5,3+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+plt.subplot(3,5,3+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+
+mapa_A = mapa_r_nmt[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rr_nmt[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = 'u NMT'
+plt.subplot(3,5,4)
+plt.quiver(x_plot, y_plot, tx2, -ty2, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k', text = False )
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+plt.text( 880, -80, 'Método  de', ha = 'right', fontsize = 17 )
+
+
+plt.subplot(3,5,4+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' , text = False )
+
+plt.subplot(3,5,4+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+
+mapa_A = mapa_r_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rr_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = 'u Suave'
+
+plt.subplot(3,5,5)
+plt.quiver(x_plot, y_plot, tx3, -ty3, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k', text = False )
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+plt.text( 150, -80, 'regularización', ha = 'left', fontsize = 17 )
+
+
+plt.subplot(3,5,5+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+plt.colorbar(aspect = 10, shrink = 1)
+
+
+plt.subplot(3,5,5+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+plt.colorbar(aspect = 10, shrink = 1)
+
+#%% Con vector y escala optima
+
+D_zoom = 18 # um
+L_ventana = int( np.round(ws/ps) )*ps
+mapa_A = mapa_d_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+L_mapa = L_ventana*len(mapa_A)
+D_mascara = int((L_mapa/ps - 1024)/2)
+a, b = 0 - D_mascara, 1024 + D_mascara 
+Ycm, Xcm = auxi.center_of_mass( mascara )
+
+plt.figure(figsize=[10,10], layout = "compressed")
+
+
+mapa_A = mapa_d_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+
+titulo = "u Suave"
+plt.subplot(3,5,1)
+plt.quiver(x_plot, y_plot, tx, -ty, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k')
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+
+
+plt.subplot(3,5,1+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0 )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+plt.text( 80, 512, '||Tracción|| [kPa]', rotation = 90, ha = 'center', va = 'center', fontsize = 12 )
+
+
+plt.subplot(3,5,1+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+plt.text( 80, 512, 'Ángulo [grados]', rotation = 90, ha = 'center', va = 'center', fontsize = 12 )
+
+
+mapa_A = mapa_d_ss[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_ss[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = "u Suave + t Suave"
+plt.subplot(3,5,2)
+plt.quiver(x_plot, y_plot, tx_s, -ty_s, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k', text = False )
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+plt.text( 512, -80, 'Inversión  directa', ha = 'center', fontsize = 17 )
+
+
+plt.subplot(3,5,2+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0 )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+plt.subplot(3,5,2+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+
+mapa_A = mapa_d_si[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_si[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = "u Interpolado"
+plt.subplot(3,5,3)
+plt.quiver(x_plot, y_plot, tx_i, -ty_i, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k', text = False )
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+
+plt.subplot(3,5,3+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0 )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+plt.subplot(3,5,3+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+
+mapa_A = mapa_r_nmt[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rr_nmt[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = 'u NMT'
+plt.subplot(3,5,4)
+plt.quiver(x_plot, y_plot, tx2, -ty2, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k', text = False )
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+plt.text( 880, -80, 'Método  de', ha = 'right', fontsize = 17 )
+
+
+plt.subplot(3,5,4+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0 )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' , text = False )
+
+plt.subplot(3,5,4+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+
+
+mapa_A = mapa_r_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rr_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = 'u Suave'
+
+plt.subplot(3,5,5)
+plt.quiver(x_plot, y_plot, tx3, -ty3, scale = 20000, width = 0.005)
+# plt.quiver(x_plot, y_plot, tx_s*auxi.reshape_mask(mascara20, x, y), -ty_s*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, img_len = b - 20, font_size = '10', color = 'k', text = False )
+plt.xlim([a,b])
+plt.ylim([b,a])
+plt.plot([Xcm],[Ycm],'x',c='k')
+plt.title(titulo)
+plt.text( 150, -80, 'regularización', ha = 'left', fontsize = 17 )
+
+
+plt.subplot(3,5,5+5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0 )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+plt.colorbar(aspect = 10, shrink = 1)
+
+
+plt.subplot(3,5,5+10)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w', text = False  )
+plt.colorbar(aspect = 10, shrink = 1)
+
+
+#%%
+
+resultante = np.sum( np.real(tx3) ), np.sum( np.real(ty3) )
+print(resultante)
+
+
+
+#%% Sin vector
+
+D_zoom = 15 # um
+L_ventana = int( np.round(ws/ps) )*ps
+mapa_A = mapa_d_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+L_mapa = L_ventana*len(mapa)
+D_mascara = int((L_mapa/ps - 1024)/2)
+a, b = 0 - D_mascara, 1024 + D_mascara 
+
+
+plt.figure(figsize=[10,10], layout = "compressed")
+
+
+mapa_A = mapa_d_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = "u Suave"
+plt.subplot(2,5,1)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+plt.title(titulo)
+
+plt.subplot(2,5,1+5)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+
+
+mapa_A = mapa_d_ss[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_ss[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = "u Suave + t Suave"
+plt.subplot(2,5,2)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+plt.title(titulo)
+plt.text( 512, -100, 'Inversión  directa', ha = 'center', fontsize = 17 )
+
+plt.subplot(2,5,2+5)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+
+
+mapa_A = mapa_d_si[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_si[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = "u Interpolado"
+plt.subplot(2,5,3)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+plt.title(titulo)
+
+plt.subplot(2,5,3+5)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+
+
+mapa_A = mapa_r_nmt[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rr_nmt[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = 'u NMT'
+plt.subplot(2,5,4)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+plt.title(titulo)
+plt.text( 880, -100, 'Método  de', ha = 'right', fontsize = 17 )
+
+
+plt.subplot(2,5,4+5)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+# plt.colorbar(aspect = 10, shrink = 0.825)
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+
+
+mapa_A = mapa_r_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rr_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]/1000
+
+titulo = 'u Suave'
+plt.subplot(2,5,5)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si/1000) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+plt.title(titulo)
+plt.text( 150, -100, 'regularización', ha = 'left', fontsize = 17 )
+plt.text( 950, 512, 'Tracción [kPa]', rotation = 90, ha = 'center', va = 'center', fontsize = 12 )
+plt.colorbar(aspect = 10, shrink = 1)
+
+
+plt.subplot(2,5,5+5)
+plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '10', color = 'w' )
+plt.text( 950, 512, 'Ángulo [grados]', rotation = 90, ha = 'center', va = 'center', fontsize = 12 )
+plt.colorbar(aspect = 10, shrink = 1)
+
+
+
+
+
+
+
+
+
+
+
+#%%
+
+D_zoom = 15 # um
+mapa_A = mapa_d_ss[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+mapa_R = Rd_s[ int(D_zoom/2.5):-int(D_zoom/2.5) , int(D_zoom/2.5):-int(D_zoom/2.5) ]
+L_ventana = int( np.round(ws/ps) )*ps
+L_mapa = L_ventana*len(mapa_A)
+D_mascara = int((L_mapa/ps - 1024)/2)
+a, b = 0 - D_mascara, 1024 + D_mascara 
+# a, b = int(0 - D_mascara - D_zoom/ps), int(1024 + D_mascara + D_zoom/ps) 
+
+plt.figure(figsize=[7,7])
+# plt.imshow( mapa_A, extent = [a,b,b,a], vmin = -45, vmax = 45)
+plt.imshow( mapa_R, extent = [a,b,b,a], vmin = 0, vmax = np.max(Rd_si) )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 1 )
+plt.xticks( [] )
+plt.yticks( [] )
+plt.colorbar(aspect = 10, shrink = 0.825)
+# plt.plot( [727-10/ps, 727], [500,500], c = 'w' )
+auxi.barra_de_escala( 10, sep = 1.2, img_len = b - 20, pixel_size = ps, font_size = '20', color = 'w', more_text = name )
+
+
+
+
+
+
+
+
+
+
+
+
+
+#%% Angulo
+
+mapa, angulo, Dangulo = proyecctar_angulo(np.real(ty_s), np.real(tx_s), y, x, mascara, th = 1/3)
+# mapa, angulo, Dangulo = proyecctar_angulo(np.real(ty), np.real(tx), y, x, mascara, th = 1/3)
+
+# angulo[angulo>45] = 0
+plt.imshow( mapa, extent = [0,1024,1024,0], vmin = -45, vmax = 45)
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 0.7 )
+plt.xticks( [] )
+plt.yticks( [] )
+plt.colorbar()
+
+print(angulo,Dangulo)
+
+#%% Vectorial 
+
+plt.quiver(x_plot, y_plot, tx, -ty, scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, font_size = '20', color = 'k', more_text = name )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+Ycm, Xcm = auxi.center_of_mass( mascara )
+plt.plot([Xcm],[Ycm],'o',c='r')
+
+
+#%% modulo
+plt.imshow( auxi.R( tx, ty ), extent = [0,1024,1024,0] )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 0.7 )
+plt.xticks( [] )
+plt.yticks( [] )
+plt.colorbar()
+
+
+
+
+
+
+
+
+
+#%%
+print( "ds:   ", *adentro_y_afuera(Rd_s, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) ) )
+print( "dss:  ", *adentro_y_afuera(Rd_ss, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) ) )
+print( "rnmt: ", *adentro_y_afuera(Rr_nmt, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) ) )
+print( "rs:   ", *adentro_y_afuera(Rr_s, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) ) )
+print( "dsi:  ", *adentro_y_afuera(Rd_si, auxi.reshape_mask(mascara, x, y), auxi.reshape_mask(mascara10, x, y) ) )
+
+
+
+
+#%% dierencia vectorial
+plt.figure( figsize = [20,20] )
+plt.subplot(4,3,4)
+plt.quiver(x_plot, y_plot, tx2-tx, -ty2+ty, scale = 20000)
+# plt.quiver(x_plot, y_plot, tx1*auxi.reshape_mask(mascara20, x, y), -ty1*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, font_size = '10', color = 'k', more_text = 't' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+
+
+#%% dierencia vectorial
+plt.figure( figsize = [20,20] )
+plt.subplot(4,3,4)
+plt.quiver(x_plot, y_plot, tx2-tx_i, -ty2+ty_i, scale = 20000)
+# plt.quiver(x_plot, y_plot, tx1*auxi.reshape_mask(mascara20, x, y), -ty1*auxi.reshape_mask(mascara20, x, y), scale = 20000)
+plt.imshow( mascara, cmap = color_maps[i], alpha = 0.5 )
+auxi.barra_de_escala( 10, sep = 1.5,  pixel_size = ps, font_size = '10', color = 'k', more_text = 't' )
+plt.xlim([0,1023])
+plt.ylim([1023,0])
+
+#%% diferencia de los modulos
+plt.imshow( auxi.R( tx2, ty2 ) - auxi.R( tx_i, ty_i ), extent = [0,1024,1024,0] )
+plt.plot( bor[1], bor[0], c = 'w', ls = 'dashed', lw = 0.7 )
+plt.xticks( [] )
+plt.yticks( [] )
+plt.colorbar()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#%%
+
+
+# D = [ 0.069,0.071,0.073,0.075,0.077,0.079,0.081,0.083,0.086,0.089,0.091,0.094,0.096,0.097,0.101,0.104,0.106,0.109 ]
+# n = np.arange(0,len(D)/2,0.5)
+
+# plt.plot( n, D, 'o')
+# plt.grid()
+
+# long = np.mean( np.diff(D)/np.diff(n) )
+# omega = 2*np.pi*40000
+
+# print(long*omega)
+
+
+
+
+
+
+
