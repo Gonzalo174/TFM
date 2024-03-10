@@ -54,6 +54,63 @@ muestra = [ 25, 9, (11,4), (10,5) ]
 As = [  0.75, 0.75, 0.85, 0.8]
 linea_muestra = [ 'MCF10', 'MCF10', 'MCF7', 'MCF7' ]
 
+#%% Figura de baja magnificación
+
+path = r"C:\Users\gonza\1\Tesis\Celulas Rebe"
+nombres7 = os.listdir(path + r'\MCF7')
+nombres10 = os.listdir(path + r'\MCF10A')
+archivos7 = [ iio.imread( path + r'\MCF7\\' + nom ) for nom in nombres7 if "oif" in nom ]
+archivos10 = [ iio.imread( path + r'\MCF10A\\' + nom ) for nom in nombres10 if "oif" in nom ]
+zoom7 = [1,1,1,1,1.5,1.5]
+zoom10 = [1,1,1.5,1.8,1.8]
+campo = 1272
+ps7 = [ (campo/zoom7[i])/archivos7[i].shape[-1] for i in range(len(archivos7)) ]
+ps10 = [ (campo/zoom10[i])/archivos10[i].shape[-1] for i in range(len(archivos10)) ]
+
+#%%
+
+plt.figure(figsize = [7,7], layout = "compressed")
+plt.subplot(1,2,1)
+plt.imshow( archivos10[4], cmap = 'gray', vmin = 160 )
+auxi.barra_de_escala( 100, img_len = archivos10[4].shape[-1]*0.98, sep = 12,  pixel_size = ps10[4], font_size = '13', color = 'k', more_text = "MCF10A" )
+plt.subplot(1,2,2)
+plt.imshow( archivos7[5][1], cmap = 'gray', vmin = 30 )
+auxi.barra_de_escala( 100, img_len = archivos7[5].shape[-1]*0.98, sep = 15,  pixel_size = ps7[4], font_size = '13', color = 'k', more_text = "MCF7" )
+
+#%%
+plt.imshow(archivos10[4], cmap = 'gray')
+plt.show()
+plt.imshow(archivos7[5][1], cmap = 'gray')
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #%% Hacer figura con: Bien adherida: G18 R22 | Mal adherida: A30 R1
 
 pre, post, celula_B, mascara_B, mascara10, mascara20, ps_B = auxi.celula( 22, 'MCF10', place = 'home', trans = True, D_pp = 0 )

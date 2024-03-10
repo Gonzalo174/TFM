@@ -539,6 +539,22 @@ output_filename = 'piv.gif'  # Specify the output filename
 images[0].save(output_filename, save_all=True, append_images=images[1:], duration=1000, loop=0)
 
 
+#%%
+from PIL import Image
+
+# Open the images and convert them to the same format
+image_filenames = ['CC.png','SC.png']
+images = []
+for filename in image_filenames:
+    image = Image.open(filename)
+    # fondo = np.zeros
+    # image = image.convert('RGBA')  # Convert to RGBA format (optional, for transparency support)
+    images.append(image)
+
+# Save the images as an animated GIF
+output_filename = 'corri.gif'  # Specify the output filename
+images[0].save(output_filename, save_all=True, append_images=images[1:], duration=2500, loop=0)
+
 
 
 
