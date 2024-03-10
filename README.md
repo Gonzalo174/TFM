@@ -7,6 +7,3 @@ Codirectora: Dra. Lía Isabel Pietrasanta
 Fecha de defensa: 26/03/2024
 
 En el archivo TFM.py se encuentran las funciones mencionadas, en auxi.py hay funciones auxiliares y en los demás hay implementaciones de estas funciones.
-
-# Particle Image Velocimetry (PIV) and Traction Force Microscopy (TFM) functions that I made for my bachelor thesis.  
-
